@@ -1,0 +1,308 @@
+/*
+  TicSol Logistics Hub — Receção
+  Tokens desenhados para leitura rápida em ambiente de armazém (alto
+  contraste, hierarquia clara), não para uma página de marketing.
+*/
+
+:root {
+  --ink: #141a1f;
+  --paper: #eef1ee;
+  --panel: #ffffff;
+  --steel: #2f4f6b;
+  --steel-dark: #1c3346;
+  --amber: #c98a2e;
+  --amber-bg: #fbf1e2;
+  --green: #2f7d5c;
+  --green-bg: #e9f3ee;
+  --red: #b8433a;
+  --red-bg: #fbebe9;
+  --line: #dde2df;
+  --muted: #5b6b66;
+
+  --font-ui: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+  --radius: 6px;
+}
+
+.recepcao {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+/* ---------- Coluna esquerda: fila de cais ---------- */
+
+.recepcao__fila {
+  background: var(--steel-dark);
+  color: #dce6ee;
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+.recepcao__fila-titulo {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f97ac;
+  padding: 0 20px 12px;
+  border-bottom: 1px solid #2a4256;
+  margin-bottom: 8px;
+}
+
+.recepcao__cais-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 20px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.recepcao__cais-item:hover {
+  background: #24384a;
+}
+
+.recepcao__cais-item--ativo {
+  background: #24384a;
+  border-left-color: var(--amber);
+}
+
+.recepcao__cais-hora {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: #f2c98a;
+}
+
+.recepcao__cais-fornecedor {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.recepcao__cais-meta {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: #7f97ac;
+}
+
+/* ---------- Coluna direita: detalhe da encomenda ---------- */
+
+.recepcao__detalhe {
+  padding: 32px 40px;
+  overflow-y: auto;
+}
+
+.recepcao__cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.recepcao__cabecalho h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.recepcao__cabecalho .oc {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.recepcao__estado-pill {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 100px;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+/* ---------- Checklist de controlo de qualidade (Secção 2.8.9) ---------- */
+
+.recepcao__checklist {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.recepcao__check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.recepcao__check-item input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--steel);
+}
+
+/* ---------- Tabela de linhas ---------- */
+
+.recepcao__linhas {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.recepcao__linha {
+  display: grid;
+  grid-template-columns: 1.6fr 0.8fr 0.9fr 0.9fr 1.3fr;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.recepcao__linha:last-child {
+  border-bottom: none;
+}
+
+.recepcao__linha-header {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: #f6f7f5;
+}
+
+.recepcao__produto-sku {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.recepcao__produto-nome {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.recepcao__input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: var(--font-data);
+  font-size: 13px;
+  background: var(--paper);
+}
+
+.recepcao__input:focus-visible {
+  outline: 2px solid var(--steel);
+  outline-offset: 1px;
+  background: var(--panel);
+}
+
+/* ---------- Elemento assinatura: barra de conferência ---------- */
+
+.recepcao__conferencia {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recepcao__conferencia-numeros {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.recepcao__conferencia-barra {
+  height: 6px;
+  background: var(--line);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.recepcao__conferencia-fill {
+  height: 100%;
+  border-radius: 100px;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.recepcao__conferencia-fill--parcial { background: var(--amber); }
+.recepcao__conferencia-fill--completo { background: var(--green); }
+.recepcao__conferencia-fill--excesso { background: var(--red); }
+
+/* ---------- Ações ---------- */
+
+.recepcao__acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.recepcao__botao {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 22px;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+.recepcao__botao:hover { filter: brightness(0.94); }
+.recepcao__botao:focus-visible { outline: 2px solid var(--steel-dark); outline-offset: 2px; }
+
+.recepcao__botao--rejeitar {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.recepcao__botao--confirmar {
+  background: var(--steel);
+  color: #fff;
+}
+
+.recepcao__botao:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- Estado vazio ---------- */
+
+.recepcao__vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 80px;
+  color: var(--muted);
+}
+
+.recepcao__vazio h2 {
+  font-size: 16px;
+  color: var(--ink);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .recepcao { grid-template-columns: 1fr; }
+  .recepcao__fila { display: flex; overflow-x: auto; padding: 12px; }
+  .recepcao__linha { grid-template-columns: 1fr; gap: 8px; }
+  .recepcao__checklist { grid-template-columns: 1fr; }
+}

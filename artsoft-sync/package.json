@@ -1,0 +1,22 @@
+{
+  "name": "artsoft-sync",
+  "version": "1.0.0",
+  "description": "Serviço de sincronização ARTSOFT -> TicSol Logistics Hub. Corre localmente na rede da Ticsol (fala com o ARTSOFT em 192.168.x.x), nunca precisa de acesso externo.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "sync": "node index.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "csv-parse": "^7.0.2",
+    "dotenv": "^17.4.2",
+    "iconv-lite": "^0.7.3",
+    "odbc": "^2.5.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0"
+  }
+}

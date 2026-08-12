@@ -1,0 +1,19 @@
+## postgrest.conf — exemplo. Ver docs/Guia_pgAdmin_Criar_Base_e_Schema.docx
+## para a explicação completa passo-a-passo (roles, JWT, testes com curl).
+
+## authenticator é a role de LOGIN criada em database/02_security.sql;
+## a app nunca vê esta password diretamente.
+db-uri = "postgres://authenticator:MUDA-ESTA-PASSWORD@localhost:5432/ticsol_logistics_hub"
+
+## Schema exposto pela API — por omissão o PostgREST só olha para "public"
+db-schemas = "logistics"
+
+## Role usada quando não há JWT no pedido (ou o JWT falha a validar)
+db-anon-role = "web_anon"
+
+## Segredo para validar os JWT (mesmo segredo usado para os assinar).
+## NUNCA deixar vazio em produção, nem reutilizar o valor de exemplo abaixo.
+jwt-secret = "MUDA-ESTE-SEGREDO-para-32-caracteres-aleatorios-minimo"
+
+server-port = 3001
+db-pool = 10

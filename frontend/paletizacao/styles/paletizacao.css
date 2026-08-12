@@ -1,0 +1,187 @@
+/*
+  TicSol Logistics Hub — Paletização
+  Reutiliza os tokens de ../shared/tokens.css
+*/
+
+.paletizacao {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.paletizacao__fila {
+  background: var(--steel-dark);
+  color: #dce6ee;
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+.paletizacao__fila-titulo {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f97ac;
+  padding: 0 20px 12px;
+  border-bottom: 1px solid #2a4256;
+  margin-bottom: 8px;
+}
+
+.paletizacao__cliente-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 20px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.paletizacao__cliente-item:hover { background: #24384a; }
+.paletizacao__cliente-item--ativo { background: #24384a; border-left-color: var(--amber); }
+
+.paletizacao__fluxo-pill {
+  align-self: flex-start;
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #2a4256;
+  color: #f2c98a;
+}
+
+.paletizacao__cliente-nome { font-size: 14px; font-weight: 500; }
+.paletizacao__meta { font-family: var(--font-data); font-size: 11px; color: #7f97ac; }
+
+.paletizacao__detalhe { padding: 32px 40px; overflow-y: auto; }
+
+.paletizacao__cabecalho {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.paletizacao__cabecalho h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+.paletizacao__cabecalho .oc { font-family: var(--font-data); font-size: 13px; color: var(--muted); }
+
+.paletizacao__alerta {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+.paletizacao__alerta--erro { background: var(--red-bg); color: var(--red); }
+
+.paletizacao__linhas-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.paletizacao__linha-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  text-align: left;
+}
+.paletizacao__linha-btn--ativo { border-color: var(--steel); box-shadow: 0 0 0 1px var(--steel); }
+.paletizacao__linha-btn-sku { font-family: var(--font-data); font-size: 11px; color: var(--muted); }
+.paletizacao__linha-btn-qtd { font-family: var(--font-data); font-size: 12px; color: var(--steel); }
+
+.paletizacao__acao-calculo {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.paletizacao__input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: var(--font-data);
+  font-size: 13px;
+  background: var(--panel);
+  min-width: 200px;
+}
+
+.paletizacao__botao {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 22px;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+}
+.paletizacao__botao:disabled { opacity: 0.5; cursor: not-allowed; }
+.paletizacao__botao--secundario { background: var(--panel); border: 1px solid var(--steel); color: var(--steel); }
+.paletizacao__botao--primario { background: var(--steel); color: #fff; }
+
+.paletizacao__plano-titulo { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+
+.paletizacao__plano-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.paletizacao__palete-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.paletizacao__palete-card--alerta { border-left-color: var(--red); }
+
+.paletizacao__palete-numero { font-weight: 600; margin-bottom: 8px; }
+.paletizacao__palete-linha {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0;
+}
+.paletizacao__palete-alertas {
+  margin: 10px 0 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--red);
+}
+
+.paletizacao__acoes { display: flex; justify-content: flex-end; }
+
+.paletizacao__resultado {
+  background: var(--green-bg);
+  border: 1px solid var(--green);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.paletizacao__resultado-titulo { font-weight: 600; color: var(--green); margin-bottom: 10px; }
+.paletizacao__sscc-linha {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-data);
+  font-size: 13px;
+  padding: 4px 0;
+}
+.paletizacao__sscc-codigo { color: var(--steel-dark); }
+
+.paletizacao__vazio { padding-top: 80px; color: var(--muted); }
+.paletizacao__vazio h2 { color: var(--ink); font-size: 16px; }
+
+@media (max-width: 900px) {
+  .paletizacao { grid-template-columns: 1fr; }
+  .paletizacao__plano-grid { grid-template-columns: 1fr 1fr; }
+}
