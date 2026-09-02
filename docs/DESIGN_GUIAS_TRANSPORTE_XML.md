@@ -1,14 +1,29 @@
 # Guias de Transporte via XML ARTSOFT — aplicação do padrão Obras C002
 
 **Data:** 2026-09-02
+**Revisão:** 2 — incorpora as respostas do utilizador às três perguntas bloqueantes
 **Fase:** 1 — Análise e desenho (sem alterações de código)
+
 **Origem:** ideia do utilizador — *"na análise de obra são feitos pedidos XML para trazer os
 documentos e os lançamentos dos documentos; a ideia será no TicSol_Logistics_Hub as guias de
 transporte serem trazidas para a plataforma utilizando o mesmo conceito"*
 
-**Veredicto:** a ideia é sólida e é a abordagem certa. O padrão existe, está testado, e o
-esquema de destino no Logistics Hub já está desenhado para o receber. O que falta é
-determinação de dados reais — não arquitetura.
+**Veredicto:** ideia sólida e abordagem correta. O padrão existe e está testado, o esquema de
+destino já o acomoda, e as três perguntas bloqueantes estão respondidas. O âmbito ficou
+**mais pequeno** do que se temia — ver §4.
+
+---
+
+## 0. Decisões fechadas (respostas do utilizador, revisão 2)
+
+| # | Pergunta | Resposta | Consequência |
+|---|---|---|---|
+| 1 | Que séries são as guias? | **Varia de base de dados para base de dados.** Tem de haver zona de configuração — lista separada por `;`, ex. `V960;V980`. Confirmado que as séries de guia têm `%DocFch.Inf.TpSAFT ∈ {GR, GT, GA, GC, GD}` | Séries **nunca** hardcoded. Tabela de configuração + validação por TpSAFT. Ver §3 |
+| 2 | Âmbito: instrução logística ou guia legal completa? | **Apenas conteúdo do documento** — cabeçalho + respetivos lançamentos. Para visualização/impressão, usar pedido que devolve o documento em **base64** | Nada de reconstruir ATCUD/QR/obrigações legais em dados estruturados. O PDF do ARTSOFT resolve. **Simplificação grande.** Ver §5 |
+| 3 | Onde vivem matrícula, moradas, volumes? | Matrícula e moradas **existem em campos específicos do DocFch** — a confirmar quais. Volumes possivelmente em CDU. Ajustar em fase de testes reais | O `defcol` tem de ser **configurável**, não compilado. Ajuste sem alteração de código. Ver §6 |
+
+A resposta 3 é a que mais influencia a arquitetura: sabendo à partida que os caminhos dos campos
+vão mudar durante os testes, seria erro cozê-los em JavaScript.
 
 ---
 
@@ -22,7 +37,7 @@ determinação de dados reais — não arquitetura.
 - o **custo por armazém** de cada artigo (`StkVal`), aninhado dentro da linha
 - os dados do **terceiro** (`TerFch`), via join no cabeçalho
 
-Tudo isto numa só ida ao WebServer, por página.
+Tudo numa só ida ao WebServer, por página.
 
 ### Query filter (nível cabeçalho)
 
@@ -81,106 +96,253 @@ dedup por             → doc_id_artsoft (Doc.ID, ou Serie-NrDoc-Data como fallb
 
 ## 2. Transposição para guias de transporte
 
-**Só muda o `TpDoc` e o `defcol`.** O esqueleto — envelope, join ao terceiro, aninhamento
-de linhas, paginação por token, deduplicação — é idêntico.
+**Só muda o `TpDoc` e o `defcol`.** Esqueleto idêntico.
 
 ```
-DocFch|DocData|TpDoc={SERIE_GUIA}|Data={di}:{df}
+DocFch|DocData|TpDoc={SERIE}|Data={di}:{df}
   ^TerFch|Cliente|NrCli={%DocFch.Ter.Terceiro}|Filial={%DocFch.Ter.Filial}
 ```
 
-### Campos confirmados (existem, verificados em produção no Hub Central)
+Com várias séries configuradas (`V960;V980`), há duas hipóteses de execução, a decidir com
+dados reais:
 
-| Finalidade logística | Caminho ARTSOFT | Confiança |
+- **A** — um pedido por série, em sequência (previsível, mais round-trips)
+- **B** — intervalo `TpDoc=V960:V980` num só pedido (menos round-trips, mas apanha séries
+  intermédias não configuradas — só serve se as séries forem contíguas)
+
+**Recomendação: A.** Determinista, e o custo extra é irrelevante para o volume esperado.
+Filtrar sempre por `Inf.TpSAFT ∈ {GR,GT,GA,GC,GD}` na resposta, como rede de segurança
+contra uma série mal configurada.
+
+### Campos confirmados (em uso em produção no Hub Central)
+
+| Finalidade | Caminho ARTSOFT |
+|---|---|
+| Série | `%DocFch.Doc.Serie` |
+| Número | `%DocFch.Doc.NrDoc` |
+| **ID único (`SERIE/NR`)** | `%DocFch.Doc.ID` ← **chave para o PDF, ver §5** |
+| Data do documento | `%DocFch.Data.Docum` |
+| Tipo SAF-T | `%DocFch.Inf.TpSAFT` |
+| Observações | `%DocFch.Doc.Obs` |
+| Pedido de origem | `%DocFch.Doc.Pedido` |
+| Nº terceiro / filial | `%DocFch.Ter.Terceiro` / `%DocFch.Ter.Filial` |
+| Nome / NIF do terceiro | `%TerFch.Ter.Nome` / `%TerFch.Ter.NIF` |
+| Morada / localidade / CP | `%TerFch.Ter.Morada` / `Ter.Localid` / `Ter.CPPais` |
+| Código do artigo | `%DocLan.Cod.Codigo` |
+| Descrição do artigo | `%StkFch.Nome.0` |
+| Quantidade movimentada | `%DocLan.Qtd.Movim` |
+| Unidade logística | `%StkFch.Logis.Uni` |
+| Nº lançamento / linha | `%DocLan.Doc.NrLan` / `%DocLan.Doc.NrLin` |
+| Observação de linha | `%DocLan.Div.Obs` |
+| Registo interno do artigo | `%StkFch.Div.NrReg` |
+| Campos do utilizador | `%DocFch.CDU.01`…`CDU.11` + `CDUNm.01`…`11` (rótulos) |
+
+### Campos por confirmar (resposta 3)
+
+| Campo | Estado | Nota |
 |---|---|---|
-| Série do documento | `%DocFch.Doc.Serie` | ✅ Confirmado |
-| Número do documento | `%DocFch.Doc.NrDoc` | ✅ Confirmado |
-| ID único do documento | `%DocFch.Doc.ID` | ✅ Confirmado |
-| Data do documento | `%DocFch.Data.Docum` | ✅ Confirmado |
-| Tipo SAF-T (GR/GT/GA/GC/GD) | `%DocFch.Inf.TpSAFT` | ✅ Confirmado |
-| Observações | `%DocFch.Doc.Obs` | ✅ Confirmado |
-| Pedido de origem | `%DocFch.Doc.Pedido` | ✅ Confirmado |
-| Nº terceiro / filial | `%DocFch.Ter.Terceiro` / `%DocFch.Ter.Filial` | ✅ Confirmado |
-| Nome do terceiro | `%TerFch.Ter.Nome` | ✅ Confirmado |
-| NIF do terceiro | `%TerFch.Ter.NIF` | ✅ Confirmado |
-| Morada do terceiro | `%TerFch.Ter.Morada` | ✅ Confirmado |
-| Localidade / Cód. postal | `%TerFch.Ter.Localid` / `%TerFch.Ter.CPPais` | ✅ Confirmado |
-| Código do artigo (linha) | `%DocLan.Cod.Codigo` | ✅ Confirmado |
-| Descrição do artigo | `%StkFch.Nome.0` | ✅ Confirmado |
-| Quantidade movimentada | `%DocLan.Qtd.Movim` | ✅ Confirmado |
-| Unidade logística | `%StkFch.Logis.Uni` | ✅ Confirmado |
-| Nº de lançamento / linha | `%DocLan.Doc.NrLan` / `%DocLan.Doc.NrLin` | ✅ Confirmado |
-| Observação de linha | `%DocLan.Div.Obs` | ✅ Confirmado |
-| Registo interno do artigo | `%StkFch.Div.NrReg` | ✅ Confirmado |
-| Campos definidos pelo utilizador | `%DocFch.CDU.01` … `CDU.11` (+ `CDUNm.01`…`11` para o rótulo) | ✅ Confirmado |
+| Matrícula | Existe campo específico em `DocFch` — caminho a confirmar | Utilizador confirma |
+| Morada de carga | Existe campo específico em `DocFch` — caminho a confirmar | Utilizador confirma |
+| Morada de descarga | Existe campo específico em `DocFch` — caminho a confirmar | Utilizador confirma |
+| Volumes | Possivelmente CDU | Incluir `CDUNm.01`…`11` no primeiro `defcol` de teste revela os rótulos |
+| Peso | Não determinado | Provável em `StkFch`, grupo `Logis` |
+| Data/hora de carga | Não determinado | — |
 
-### Campos NÃO DETERMINADOS (necessários para guia de transporte)
-
-Isto é o que uma guia de transporte precisa e que **não existe no `defcol` do C002** — o C002
-é um documento financeiro, não de expedição. Nenhum destes deve ser inventado.
-
-| Necessário | Estado | Onde investigar |
-|---|---|---|
-| Matrícula da viatura | ❌ NÃO DETERMINADO | Hipótese: num `CDU_xx` do cabeçalho. **Precedente:** o preset `mao_de_obra` (`importado/service.py:232`) usa `CDULan.03` como "Matricula" ao **nível de linha**. Ler `CDUNm.01`…`11` de uma guia real revela os rótulos configurados. |
-| Local/morada de carga | ❌ NÃO DETERMINADO | Ver `CDUNm_xx`; ou grupo `%DocFch.Loc.*` / `%DocFch.Mor.*` (existência por confirmar) |
-| Local/morada de descarga | ❌ NÃO DETERMINADO | Idem |
-| Data/hora de carga | ❌ NÃO DETERMINADO | `%DocFch.Data.*` tem `Docum`, `Limit`, `Vencim`, `MesDocum`, `AnoDocum` — nenhum é hora de carga |
-| Nº de volumes / paletes | ❌ NÃO DETERMINADO | Possivelmente CDU ou campo de linha |
-| Peso bruto / líquido | ❌ NÃO DETERMINADO | Provável em `StkFch` (grupo `Logis`?) mas o caminho exato não está em uso no Hub Central |
-| EAN13 / GTIN da caixa | ❌ NÃO DETERMINADO | `StkFch` tem `Cod.Codigo` e `Div.ClassSAFT`; caminho do EAN não está em uso |
-| Código ATCUD / QR | ❌ NÃO DETERMINADO | Obrigatório em guias PT desde 2022 — confirmar se o WebServer o expõe |
-| Transportadora | ❌ NÃO DETERMINADO | Pode ser o próprio terceiro, um CDU, ou não existir |
-
-> ⚠️ Nota importante: **uma guia de transporte em Portugal tem obrigações legais** (ATCUD,
-> local e data/hora de carga e descarga, matrícula, comunicação à AT). Se o objetivo incluir
-> reproduzir ou reimprimir a guia, e não apenas usá-la como instrução logística, estes campos
-> deixam de ser opcionais. Vale a pena esclarecer o âmbito antes de construir.
-
-### Como descobrir a série (`TpDoc`) — sem adivinhar
-
-Existem **dois mecanismos já implementados** no Hub Central. Nenhum requer suposições:
-
-1. **Enumerar do próprio ARTSOFT**
-   `fetch_cfgdocum_document_types()` → `POST DocFch/CfgDocum` com corpo `<root/>`
-   devolve todos os tipos de documento configurados. (`_parse_cfgdocum_ids` filtra os que
-   começam por `V`; para guias, remover esse filtro.)
-
-2. **Ler da configuração já existente**
-   `config.configuracao`, chaves `documentos.documentos_a` … `documentos_e`
-   (valores separados por `;`). O grupo **A** está rotulado **"Guias"**
-   (`obras/service.py:393`, `export_service.py:697`).
-
-3. **Confirmar pelo SAF-T** — filtrar/validar por `%DocFch.Inf.TpSAFT` ∈ {GR, GT, GA, GC, GD}
-   garante que o documento é mesmo movimento de mercadorias, e não uma fatura.
+Todos estes entram por **configuração**, não por código. Ver §6.
 
 ---
 
-## 3. Mapeamento para o esquema do Logistics Hub
+## 3. Zona de configuração (resposta 1)
 
-**Boa notícia: as tabelas já existem.** O `01_schema.sql` foi desenhado a pensar nisto.
+Espelha o padrão já provado no Hub Central: `config.configuracao`, chave
+`documentos.documentos_a`, valores separados por `;`, parseados por
+`_parse_documentos_associados_tipos` (`artsoft_client.py:106-126`).
+
+### DDL proposto
+
+```sql
+CREATE TABLE logistics.configuracao (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id   uuid NOT NULL REFERENCES logistics.empresa(id),
+    chave        varchar(120) NOT NULL,
+    valor        text,
+    descricao    text,
+    updated_at   timestamptz NOT NULL DEFAULT now(),
+    updated_by   varchar(100),
+    UNIQUE (empresa_id, chave)
+);
+ALTER TABLE logistics.configuracao ENABLE ROW LEVEL SECURITY;
+CREATE POLICY isolamento_empresa ON logistics.configuracao
+    USING (empresa_id = (current_setting('request.jwt.claims', true)::json->>'empresa_id')::uuid);
+```
+
+`empresa_id` na chave única é deliberado: séries variam por base de dados **e** por empresa.
+
+### Chaves iniciais
+
+| Chave | Exemplo | Significado |
+|---|---|---|
+| `guias.series` | `V960;V980` | Séries a importar, separadas por `;` |
+| `guias.tpsaft_validos` | `GR;GT;GA;GC;GD` | Filtro de segurança sobre `Inf.TpSAFT` |
+| `guias.page_size` | `50` | Registos por página |
+| `guias.max_pages` | `300` | Limite de segurança do ciclo de paginação |
+| `artsoft.host` | — | Host do WebServer |
+| `artsoft.porta` | `4200` | Porta |
+| `artsoft.utilizador` | — | Utilizador |
+| `artsoft.timeout` | `60` | Timeout em segundos |
+
+**A password nunca vai para esta tabela em claro.** Segredo em variável de ambiente ou gestor
+de segredos — ver o alerta de segurança do `DIAGNOSTICO_INTEGRACAO_ARTSOFT.md`, que continua
+por resolver.
+
+### Regras de parsing (portadas de `_parse_documentos_associados_tipos`)
+
+- separar por `;`
+- `trim` a cada parte
+- `upper()`
+- descartar vazios
+- descartar duplicados preservando a ordem
+- normalizar `V96` → `V960`? **Não.** `_normalize_document_type` faz `prefixo + 3 dígitos`
+  (`artsoft_client.py:172-181`); confirmar se se aplica às séries de guia antes de portar.
+  Até lá, usar o valor tal como configurado.
+
+---
+
+## 4. Âmbito (resposta 2) — o que muda
+
+Confirmado: **cabeçalho + lançamentos como dados estruturados. Nada mais.**
+
+Fica **fora** de âmbito, e é uma simplificação considerável:
+
+- ❌ ATCUD / código QR
+- ❌ Comunicação à AT
+- ❌ Reconstrução de layout da guia
+- ❌ Campos legais obrigatórios como colunas estruturadas
+
+A visualização e a impressão resolvem-se com o PDF que o próprio ARTSOFT gera (§5). Não é
+preciso reproduzir o documento — basta pedi-lo.
+
+Os campos da resposta 3 (matrícula, moradas, volumes) continuam úteis como **dados
+operacionais** — para associar a guia a uma `carga`/`viatura` no WMS — mas deixam de ser
+requisito de conformidade legal. Se um deles não for encontrado, degrada a funcionalidade;
+não invalida a guia.
+
+---
+
+## 5. Visualização e impressão via base64 (resposta 2)
+
+**Já está implementado no Hub Central.** `preview_documento()`
+(`artsoft_sync_service.py:1969-2078`) — reaproveitamento direto, não é preciso desenhar nada.
+
+### Fluxo
+
+```
+doc_id = "V960/240123"           ← vem de %DocFch.Doc.ID na importação
+serie  = doc_id.split("/")[0]    ← "V960"
+
+1. POST DocFch/CfgDocum
+   <?xml version='1.0' encoding='UTF-8'?>
+   <table type='V960' fields='DocID,FmtDoc,FmtArq,FormProvis,FormPortas0' name='T'/>
+   → devolve <rec FmtDoc="Docum\Doc-Custom.lst;Docum\Doc-A4.lst:Genérico" …>
+     FmtDoc: formulários separados por ';', descrição opcional após ':'
+
+2. Para cada formulário, em ordem:
+   POST DocFch/DocPrintEx
+   <DocID='V960/240123' form='Docum\Doc-A4.lst' arquivo='S'/>
+   → <base64>…</base64>   = PDF
+
+3. Fallbacks standard se todos os da série falharem:
+   Docum\Doc-A4.lst
+   Docum\Doc.lst
+
+4. base64 → bytes → PDF
+```
+
+### Classificação da resposta (`_classify_print_response`)
+
+| Resultado | Condição | Ação |
+|---|---|---|
+| `ok` | existe `<base64>` com conteúdo | decodificar, devolver PDF |
+| `doc_not_found` | `rc='DBKeyNotFound'` | **abortar** — documento não existe neste WebServer/ano; trocar de formulário não ajuda |
+| `form_error` | `rc` começa por `ERRO`/`Erro`, ou não há `<base64>` | tentar formulário seguinte |
+
+A distinção entre `doc_not_found` e `form_error` é subtil e importante — poupa dezenas de
+pedidos inúteis. Portar tal e qual.
+
+### Consequência para o esquema
+
+Guardar `%DocFch.Doc.ID` na importação é **obrigatório** — é a chave que alimenta o
+`DocPrintEx` mais tarde. Sem ela, não há PDF.
+
+O PDF **não se guarda** na base de dados: pede-se a pedido, com cache curta se necessário.
+Fica sempre coerente com o ARTSOFT e não incha o armazenamento.
+
+---
+
+## 6. `defcol` configurável (resposta 3)
+
+Como os caminhos dos campos vão ser confirmados durante os testes reais, compilá-los em
+JavaScript significaria uma alteração de código + redeploy por cada ajuste. Errado.
+
+O Hub Central já resolveu isto: `config.pedidos_xml` guarda **templates XML versionados em
+base de dados**, com histórico de alterações (`pedidos_xml_historico`) e registo de execuções
+(`auditoria.pedidos_xml_execucoes`). O `render_query_xml()` substitui `{{placeholders}}`
+(`pedidos_xml/service.py:364-369`).
+
+### Proposta para o Logistics Hub
+
+```sql
+CREATE TABLE logistics.mapeamento_campo (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id  uuid NOT NULL REFERENCES logistics.empresa(id),
+    contexto    varchar(50)  NOT NULL,   -- 'guia_cabecalho' | 'guia_linha'
+    campo       varchar(60)  NOT NULL,   -- 'matricula', 'morada_descarga', 'volumes'
+    tag_xml     varchar(60)  NOT NULL,   -- nome do elemento no defcol
+    form_path   varchar(120) NOT NULL,   -- '%DocFch.???'  ← ajustável em testes
+    obrigatorio boolean NOT NULL DEFAULT false,
+    ativo       boolean NOT NULL DEFAULT true,
+    ordem       integer,
+    UNIQUE (empresa_id, contexto, campo)
+);
+```
+
+O `defcol` passa a ser **gerado** a partir desta tabela. Confirmar que a matrícula está em
+`%DocFch.Xxx.Yyy` torna-se um `UPDATE` de uma linha, e o pedido seguinte já a traz.
+
+Campos base (os confirmados da §2) entram como *seed*; os por confirmar entram com
+`ativo=false` e `form_path` vazio, ligando-se quando forem conhecidos.
+
+> Compromisso assumido: mais uma indireção do que hardcoded. Justifica-se **porque o
+> utilizador declarou explicitamente que estes caminhos vão mudar em testes reais**. Sem esse
+> facto, seria complexidade desnecessária. Não estender este padrão a campos estáveis.
+
+---
+
+## 7. Mapeamento para o esquema do Logistics Hub
+
+**As tabelas de destino já existem.**
 
 ```
 ARTSOFT DocFch (guia)  ──→  logistics.documento
-  Doc.Serie + Doc.NrDoc         numero            (chave natural)
-  Inf.TpSAFT                    tipo              (guia_transporte | guia_remessa)
+  Doc.Serie + Doc.NrDoc         numero              (chave natural)
+  Doc.ID                        origem_doc_id       ← NOVO, chave do PDF
+  Inf.TpSAFT                    tipo                (guia_transporte | guia_remessa)
   Data.Docum                    data_emissao
   Ter.Terceiro → TerFch         cliente_id / fornecedor_id
-  XML completo da resposta      conteudo_xml      (auditoria/rastreio)
-  Doc.Pedido                    encomenda_id      (por resolver)
-                                carga_id          (associação a carga)
+  Doc.Pedido                    encomenda_id        (resolução por confirmar)
+                                carga_id            (associação a carga)
 
-ARTSOFT DocLan (linhas) ──→  (tabela de linhas de guia — POR CRIAR)
-  Cod.Codigo → StkFch           produto_id        (via produto.sku_interno)
+ARTSOFT DocLan (linhas) ──→  logistics.linha_documento   ← NOVA TABELA
+  Cod.Codigo → StkFch           produto_id          (via produto.sku_interno)
   Qtd.Movim                     quantidade
   StkFch.Logis.Uni              unidade
   Doc.NrLan / Doc.NrLin         nr_lancamento / nr_linha
 
-ARTSOFT CDU (a determinar) ──→  logistics.viatura.matricula
-                                logistics.transportadora
-                                logistics.carga.data_hora_carga
+campos DocFch por confirmar ──→  logistics.viatura.matricula
+                                 logistics.carga (moradas, data/hora)
 ```
 
-Tipos já definidos no schema:
+Já definido no `01_schema.sql`:
 
 ```sql
 CREATE TYPE tipo_documento AS ENUM (
@@ -190,129 +352,153 @@ CREATE TYPE tipo_documento AS ENUM (
 );
 ```
 
-E a chave de idempotência está lá:
+E a chave de idempotência:
 
 ```sql
 UNIQUE (empresa_id, tipo, numero)
 ```
 
-Isto resolve o problema de duplicação por retry **sem trabalho adicional**: um `upsert` por
-`(empresa_id, tipo, numero)` é naturalmente idempotente. Reimportar a mesma guia dez vezes
-produz uma linha.
+Um `upsert` por esta chave é naturalmente idempotente — reimportar a mesma guia dez vezes
+produz uma linha. Resolve o risco de duplicação por retry sem trabalho adicional.
 
-**Lacuna:** não existe tabela de **linhas de documento**. `logistics.documento` guarda só o
-cabeçalho. As linhas da guia (que artigo, que quantidade) não têm onde ficar. É preciso criar
-`logistics.linha_documento` — com o mesmo cuidado de chave natural
-`UNIQUE (documento_id, nr_linha)`.
+### Alterações de esquema necessárias
+
+```sql
+-- 1. linhas de documento (não existe hoje — lacuna)
+CREATE TABLE logistics.linha_documento (
+    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id     uuid NOT NULL REFERENCES logistics.empresa(id),
+    documento_id   uuid NOT NULL REFERENCES logistics.documento(id) ON DELETE CASCADE,
+    nr_linha       integer NOT NULL,
+    nr_lancamento  integer,
+    produto_id     uuid REFERENCES logistics.produto(id),
+    artigo_codigo  varchar(60) NOT NULL,   -- preservar sempre o código do ARTSOFT
+    descricao      text,
+    quantidade     numeric(14,3),
+    unidade        varchar(20),
+    observacoes    text,
+    UNIQUE (documento_id, nr_linha)
+);
+
+-- 2. rastreio de origem no cabeçalho
+ALTER TABLE logistics.documento ADD COLUMN origem_serie     varchar(20);
+ALTER TABLE logistics.documento ADD COLUMN origem_doc_id    varchar(60);
+ALTER TABLE logistics.documento ADD COLUMN origem_tpsaft    varchar(10);
+ALTER TABLE logistics.documento ADD COLUMN sincronizado_em  timestamptz;
+```
+
+`artigo_codigo` guarda-se sempre, mesmo quando `produto_id` resolve. Uma guia com um artigo
+ainda não sincronizado tem de entrar na mesma — perder a linha seria pior do que ter uma
+referência por resolver.
 
 ---
 
-## 4. Direção do fluxo — e porque isso importa
+## 8. Direção do fluxo
 
-O utilizador disse guias **"trazidas para a plataforma"**. Leitura: ARTSOFT → Logistics Hub.
-
-Isto é decisivo, e é boa notícia:
+Guias **trazidas** para a plataforma: ARTSOFT → Logistics Hub. Leitura pura.
 
 | | Ler (ARTSOFT → Hub) | Escrever (Hub → ARTSOFT) |
 |---|---|---|
 | Protocolo conhecido? | ✅ Sim, testado em produção | ⚠️ Parcial |
-| Endpoint | `Queries/Query` | ❌ **NÃO DETERMINADO** |
+| Endpoint | `Queries/Query`, `DocFch/CfgDocum`, `DocFch/DocPrintEx` | ❌ **NÃO DETERMINADO** |
 | Formato | `<root type='list' …><defcol>` | ✅ Conhecido: `<document entityID='C:2838' retID='S' status='S' trans='S'><docheader>…<docitems><rec>…` (`importado/service.py:296-329`) |
-| Implementado no Hub Central | Sim | **Não** — `ImportadoService.sync()` gera o XML e guarda-o em histórico na memória, **nunca o envia** |
+| Implementado | Sim | **Não** — `ImportadoService.sync()` gera o XML e guarda-o em histórico na memória, nunca o envia |
 
-Ou seja: os únicos três endpoints ARTSOFT em uso em todo o ecossistema são
-`Queries/Query`, `DocFch/CfgDocum` e `DocFch/DocPrintEx`. **Nenhum escreve.**
+Os únicos três endpoints ARTSOFT em uso em todo o ecossistema são `Queries/Query`,
+`DocFch/CfgDocum` e `DocFch/DocPrintEx`. **Nenhum escreve.**
 
-Como a funcionalidade pedida é só de leitura, **não fica bloqueada por isto.** Fica registado
-para quando surgir o requisito inverso (§15.1 da especificação WMS: "devolver eventos de stock
-e expedição para atualização do ERP") — esse sim está bloqueado.
+A funcionalidade pedida é só de leitura → não bloqueada. Fica registado para o requisito
+inverso (§15.1 da especificação WMS: devolver eventos de stock e expedição ao ERP) — esse sim
+está bloqueado.
 
 ---
 
-## 5. O que é preciso construir
+## 9. Estrutura a construir
 
 Pressupõe a camada de protocolo da Etapa 2 do diagnóstico (porte de `ArtsoftConnection` para
-Node com ligação TCP partilhada entre `GET /login` e `POST`). **Nada disto funciona sem essa
-peça.**
+Node com ligação TCP partilhada entre `GET /login` e `POST`). **Nada funciona sem essa peça.**
 
 ```
 artsoft-sync/
 ├── artsoft/
-│   ├── connection.js          (Etapa 2 — pré-requisito)
+│   ├── connection.js          (Etapa 2 — pré-requisito, sem substituto)
 │   ├── queryBuilder.js        ← envelope <root> + defcol + subconsultas aninhadas
 │   └── pagination.js          ← ciclo de token (porte de _extract_next_token,
-│                                 incluindo o tratamento de '0' = fim)
+│                                 incluindo '0' = fim)
+├── config/
+│   ├── configuracao.js        ← leitura de logistics.configuracao
+│   ├── series.js              ← parsing 'V960;V980' (porte das regras da §3)
+│   └── mapeamento.js          ← defcol gerado de logistics.mapeamento_campo
 ├── guias/
 │   ├── query.js               ← filtro DocFch|DocData|TpDoc=…|Data=… ^TerFch
-│   ├── defcol.js              ← colunas do cabeçalho + <Lans> das linhas
 │   ├── parser.js              ← XML → {guia, linhas[]} (modelo: obras_c002_parser.py)
-│   └── mapper.js              ← → logistics.documento + linha_documento
+│   ├── mapper.js              ← → documento + linha_documento
+│   └── preview.js             ← CfgDocum + DocPrintEx → PDF (porte de preview_documento)
 └── discovery/
-    └── documentTypes.js       ← DocFch/CfgDocum → enumerar séries disponíveis
+    └── documentTypes.js       ← DocFch/CfgDocum <root/> → enumerar séries disponíveis
+                                  (alimenta o ecrã de configuração)
 ```
 
-Alterações de esquema:
-
-```sql
--- nova: linhas de documento
-CREATE TABLE logistics.linha_documento (…);
--- UNIQUE (documento_id, nr_linha)
-
--- documento: campos de origem para rastreio
-ALTER TABLE logistics.documento ADD COLUMN origem_serie varchar(20);
-ALTER TABLE logistics.documento ADD COLUMN origem_doc_id varchar(60);
-ALTER TABLE logistics.documento ADD COLUMN sincronizado_em timestamptz;
-```
+O `discovery/documentTypes.js` merece destaque: permite que o ecrã de configuração das séries
+apresente uma **lista escolhida do próprio ARTSOFT**, em vez de uma caixa de texto onde se
+escreve `V960;V980` à mão e se descobre o erro de escrita três dias depois.
 
 ---
 
-## 6. Erros do C002 a não repetir
-
-O padrão vale a pena; a implementação tem defeitos conhecidos. Ao portar:
+## 10. Erros do C002 a não repetir
 
 | Problema no C002 | Correção |
 |---|---|
-| Abre ligação ARTSOFT nova a **cada página** (`obras_c002_sync_service.py:162`) | Reutilizar a ligação dentro do ciclo, respeitando o ciclo login+POST por pedido |
-| **Sem retry** — falha de rede na página 7 de 300 perde tudo | Retry com backoff; a leitura é idempotente, logo é seguro |
-| Filtro por data em formato ARTSOFT sem validação de intervalo | Validar `di <= df` e limitar a janela |
-| `max_pages=300` é um limite silencioso — atingi-lo parece sucesso | Emitir aviso explícito e marcar a sincronização como incompleta |
-| Deduplicação só em memória, por execução | Deduplicação na BD pela chave natural (já garantida pelo `UNIQUE`) |
+| Abre ligação ARTSOFT nova a **cada página** (`obras_c002_sync_service.py:162`) | Reutilizar dentro do ciclo, respeitando login+POST por pedido |
+| **Sem retry** — falha na página 7 de 300 perde tudo | Retry com backoff; leitura é idempotente, é seguro |
+| Filtro de datas sem validação de intervalo | Validar `di <= df`, limitar a janela |
+| `max_pages=300` é limite silencioso — atingi-lo parece sucesso | Aviso explícito + marcar sincronização como incompleta |
+| Deduplicação só em memória, por execução | Deduplicação na BD pela chave natural (o `UNIQUE` já garante) |
 | Sem registo do que foi trazido | Auditoria por execução (modelo: `auditoria.pedidos_xml_execucoes`) |
+| Séries hardcoded (`TpDoc=C002`) | Configuração — é precisamente a resposta 1 |
 
 ---
 
-## 7. Perguntas por responder antes de escrever código
+## 11. Estado das perguntas
 
-Bloqueantes:
+| # | Estado |
+|---|---|
+| 1. Séries | ✅ **Resolvido** — configuração por `;`, validação por TpSAFT |
+| 2. Âmbito | ✅ **Resolvido** — cabeçalho + lançamentos; visualização por PDF base64 |
+| 3. Matrícula/moradas/volumes | 🟡 **Diferido por desenho** — `defcol` configurável absorve o ajuste sem alteração de código |
+| 4. Guias de entrada, saída, ou ambas? | ⬜ Aberto — decisão de desenho |
+| 5. Sincronização periódica ou a pedido? | ⬜ Aberto — o C002 suporta ambas (`fetch_obras_por_data`, `fetch_obra_por_nr`) |
+| 6. Guia importada cria `carga` automaticamente? | ⬜ Aberto |
+| 7. **Acesso ao ARTSOFT (host/porta/credenciais)** | 🔴 **Bloqueante para validação** |
 
-1. **Que série(s) são as guias de transporte** neste ARTSOFT? (`DocFch/CfgDocum` responde, mas
-   é preciso acesso ao servidor)
-2. **Âmbito:** as guias entram como *instrução logística* (o que expedir/receber) ou é preciso
-   reproduzir a guia legal completa (ATCUD, moradas, matrícula, horas)? A resposta determina se
-   os campos NÃO DETERMINADOS da §2 são opcionais ou obrigatórios.
-3. **Onde vivem matrícula, moradas de carga/descarga e volumes** — CDU do cabeçalho, ou grupos
-   próprios do `DocFch`? Resolve-se lendo **uma** guia real com `CDUNm.01`…`11` no `defcol`.
-
-Não bloqueantes (decisões de desenho, tomadas em conjunto depois):
-
-4. Guias de entrada (fornecedor → armazém), de saída (armazém → cliente), ou ambas?
-5. Sincronização periódica por janela de datas, ou a pedido por número de guia?
-   (o C002 suporta os dois: `fetch_obras_por_data` e `fetch_obra_por_nr`)
-6. Uma guia importada cria automaticamente uma `carga`, ou fica pendente de associação manual?
+As perguntas 4–6 não bloqueiam o arranque: afetam a orquestração, não o protocolo nem o
+mapeamento.
 
 ---
 
-## 8. Conclusão
+## 12. Conclusão
 
-A ideia está certa. O padrão C002 é exatamente a peça a reutilizar — traz cabeçalho, linhas e
-fichas de artigo num round-trip, com paginação e correlação entre tabelas já resolvidas. O
-esquema de destino no Logistics Hub já tem `tipo_documento.guia_transporte`, `carga`, `viatura`
-e `transportadora`, e a chave `UNIQUE (empresa_id, tipo, numero)` dá idempotência de graça.
+As três respostas fecharam o desenho e **reduziram** o âmbito:
 
-O que separa isto de funcionar não é desenho: é **uma guia real lida do ARTSOFT**. Uma única
-resposta captada resolve as três perguntas bloqueantes de uma vez.
+- séries por configuração, com descoberta a partir do próprio ARTSOFT
+- sem obrigações legais estruturadas — o PDF do ARTSOFT trata da visualização, e o mecanismo
+  já existe pronto a portar
+- caminhos de campos incertos absorvidos por configuração em vez de código
 
-**Recomendação:** primeiro pedido a fazer, assim que houver acesso —
-`DocFch/CfgDocum` com `<root/>` para listar as séries, depois uma query a uma guia com
-`CDUNm.01`…`11` incluídos, para revelar os rótulos dos campos definidos pelo utilizador.
-Guardar a resposta como fixture anonimizada. A partir daí o resto é execução.
+Continua a faltar **uma coisa só**: acesso ao ARTSOFT real. Sem ele não se valida nada
+contra o sistema de destino.
+
+**Mas há trabalho útil e verificável que não depende desse acesso:**
+
+1. `logistics.configuracao` + `logistics.mapeamento_campo` + `linha_documento` (DDL e migração)
+2. `queryBuilder.js` — geração do `defcol` e do envelope, testável por comparação com o XML
+   que o C002 produz hoje
+3. `parser.js` e `pagination.js` — testáveis contra fixtures sintéticas construídas a partir da
+   estrutura de resposta conhecida
+4. `series.js` — parsing de `V960;V980`, testável isoladamente
+
+O que **não** se pode fazer sem acesso é validar `connection.js` (o handshake digest só se
+prova contra o servidor real) e confirmar os caminhos dos campos da resposta 3.
+
+**Recomendação:** arrancar por 1–4 com testes, e deixar a ligação real como primeiro passo
+assim que houver credenciais.
