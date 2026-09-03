@@ -11,7 +11,7 @@ function getToken() {
   return localStorage.getItem("ticsol_jwt");
 }
 
-async function request(path, { method = "GET", body, params, prefer } = {}) {
+async function request(path, { method = "GET", body, params, prefer, timeout = 30000 } = {}) {
   const url = new URL(API_URL + path);
   if (params) {
     Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, v));
@@ -26,6 +26,7 @@ async function request(path, { method = "GET", body, params, prefer } = {}) {
     method,
     headers,
     body: body != null ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(timeout),
   });
 
   if (!res.ok) {
