@@ -211,6 +211,49 @@ app.post('/auth/login', async (req, res) => {
   }
 })
 
+app.post('/api/artsoft/guias/sync', verifyJWT, async (req, res) => {
+  try {
+    if (!req.user || !req.user.empresa_id) {
+      return res.status(403).json({ error: 'No empresa_id in token' })
+    }
+
+    const empresaId = parseInt(req.user.empresa_id, 10)
+    if (isNaN(empresaId)) {
+      return res.status(403).json({ error: 'Invalid empresa_id' })
+    }
+
+    // Dynamic import to avoid circular dependency
+    const { sincronizarGuias } = await import('../artsoft-sync/guias/sync.js')
+
+    // Get a dedicated connection for the sync (respects RLS via setEmpresaContext)
+    const client = await pool.connect()
+    try {
+      const logger = (msg) => console.log(`[SYNC:${empresaId}] ${msg}`)
+
+      logger('Iniciado…')
+      const resultado = await sincronizarGuias(client, empresaId, { logger })
+
+      logger('Concluído com sucesso.')
+      res.json({
+        success: true,
+        docs_criados: resultado.docs_criados,
+        docs_atualizados: resultado.docs_atualizados,
+        linhas_total: resultado.linhas_total,
+        erros: resultado.erros,
+        ultima_execucao: resultado.ultima_execucao,
+      })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('POST /api/artsoft/guias/sync error:', err.message)
+    res.status(500).json({
+      error: err.message,
+      code: err.name || 'SYNC_ERROR',
+    })
+  }
+})
+
 app.listen(port, () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
 })
