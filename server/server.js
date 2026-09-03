@@ -2,81 +2,211 @@ import express from 'express'
 import pkg from 'pg'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import jwt from 'jsonwebtoken'
 
 dotenv.config()
 
 const { Pool } = pkg
 const app = express()
-const port = 3000
+const port = process.env.PORT || 3000
+const jwtSecret = process.env.JWT_SECRET
+
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET not set in environment')
+}
 
 const pool = new Pool({
-  user: 'postgres',
-  password: 'Aiccol206c',
-  host: 'localhost',
-  port: 5432,
-  database: 'ticsol_logistics_hub',
+  user: process.env.DB_USER || 'app_user',
+  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'ticsol_logistics_hub',
+  statement_timeout: 30000,
+  query_timeout: 30000,
 })
+
+if (!process.env.DB_PASSWORD) {
+  console.warn('WARNING: DB_PASSWORD not set in environment')
+}
 
 app.use(cors())
 app.use(express.json())
 
-// Health check
+const verifyJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Missing authorization header' })
+  }
+
+  const token = authHeader.split(' ')[1]
+  if (!token) {
+    return res.status(401).json({ error: 'Missing bearer token' })
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret)
+    req.user = decoded
+    next()
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+const setEmpresaContext = async (req, res, next) => {
+  try {
+    if (!req.user || !req.user.empresa_id) {
+      return res.status(403).json({ error: 'No empresa_id in token' })
+    }
+
+    const empresaId = parseInt(req.user.empresa_id, 10)
+    if (isNaN(empresaId)) {
+      return res.status(403).json({ error: 'Invalid empresa_id' })
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query(
+        'SELECT logistics.set_empresa_context($1)',
+        [empresaId]
+      )
+      req.dbClient = client
+    } catch (err) {
+      client.release()
+      throw err
+    }
+    next()
+  } catch (err) {
+    console.error('setEmpresaContext error:', err.message)
+    res.status(500).json({ error: 'Database context error' })
+  }
+}
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Proxy REST requests to logistics schema
-app.get('/rest/v1/:table', async (req, res) => {
-  try {
-    const { table } = req.params
-    const { limit = 100, offset = 0 } = req.query
+const ALLOWED_TABLES = new Set([
+  'documento',
+  'linha_documento',
+  'configuracao',
+  'mapeamento_campo',
+  'sincronizacao_execucao',
+  'produto',
+  'terceiro',
+])
 
-    const result = await pool.query(
+const validateTableName = (table) => {
+  if (!table || !/^[a-z_][a-z0-9_]*$/i.test(table)) {
+    throw new Error('Invalid table name')
+  }
+  if (!ALLOWED_TABLES.has(table.toLowerCase())) {
+    throw new Error(`Access denied to table: ${table}`)
+  }
+  return table.toLowerCase()
+}
+
+app.get('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
+  try {
+    const table = validateTableName(req.params.table)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000)
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0)
+
+    const result = await req.dbClient.query(
       `SELECT * FROM logistics."${table}" LIMIT $1 OFFSET $2`,
       [limit, offset]
     )
 
     res.json(result.rows)
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: err.message })
+    console.error('GET /rest/v1/:table error:', err.message)
+    const status = err.message.includes('Access denied') ? 403 : 400
+    res.status(status).json({ error: err.message })
+  } finally {
+    if (req.dbClient) req.dbClient.release()
   }
 })
 
-// POST new record
-app.post('/rest/v1/:table', async (req, res) => {
+app.post('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
   try {
-    const { table } = req.params
+    const table = validateTableName(req.params.table)
     const data = req.body
+
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Request body must be a non-empty object')
+    }
 
     const columns = Object.keys(data)
     const values = Object.values(data)
-    const placeholders = values.map((_, i) => `$${i + 1}`).join(',')
 
+    if (columns.length === 0) {
+      throw new Error('No columns provided')
+    }
+
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(',')
     const query = `
-      INSERT INTO logistics."${table}" (${columns.join(',')})
+      INSERT INTO logistics."${table}" (${columns.map((c) => `"${c}"`).join(',')})
       VALUES (${placeholders})
       RETURNING *
     `
 
-    const result = await pool.query(query, values)
+    const result = await req.dbClient.query(query, values)
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: err.message })
+    console.error('POST /rest/v1/:table error:', err.message)
+    const status = err.message.includes('Access denied') ? 403 : 400
+    res.status(status).json({ error: err.message })
+  } finally {
+    if (req.dbClient) req.dbClient.release()
   }
 })
 
-// RPC functions
-app.post('/rpc/*', async (req, res) => {
+const ALLOWED_FUNCTIONS = new Set(['sincronizar_guias', 'validar_documento'])
+
+app.post('/rpc/:func', verifyJWT, setEmpresaContext, async (req, res) => {
   try {
-    const func = req.path.replace('/rpc/', '')
-    const result = await pool.query(`SELECT logistics.${func}($1)`, [
-      JSON.stringify(req.body),
-    ])
+    const func = req.params.func
+    if (!func || !/^[a-z_][a-z0-9_]*$/i.test(func)) {
+      throw new Error('Invalid function name')
+    }
+    if (!ALLOWED_FUNCTIONS.has(func.toLowerCase())) {
+      throw new Error(`Access denied to function: ${func}`)
+    }
+
+    const result = await req.dbClient.query(
+      `SELECT logistics."${func.toLowerCase()}"($1) AS result`,
+      [JSON.stringify(req.body)]
+    )
     res.json(result.rows[0])
   } catch (err) {
-    console.error(err)
+    console.error('POST /rpc/:func error:', err.message)
+    const status = err.message.includes('Access denied') ? 403 : 400
+    res.status(status).json({ error: err.message })
+  } finally {
+    if (req.dbClient) req.dbClient.release()
+  }
+})
+
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { username, password, empresa_id } = req.body
+    if (!username || !password || !empresa_id) {
+      return res.status(400).json({ error: 'Missing username, password, or empresa_id' })
+    }
+
+    // TODO: Validate username/password against usuarios table (with bcrypt hashing)
+    // For now: demo only (never use in production)
+    if (username === 'demo' && password === 'demo') {
+      const token = jwt.sign(
+        { username, empresa_id: parseInt(empresa_id, 10) },
+        jwtSecret,
+        { expiresIn: '24h' }
+      )
+      return res.json({ token })
+    }
+
+    res.status(401).json({ error: 'Invalid credentials' })
+  } catch (err) {
+    console.error('POST /auth/login error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
