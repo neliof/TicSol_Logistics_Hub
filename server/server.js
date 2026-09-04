@@ -4,6 +4,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
 import { verifyPassword } from './utils/password.js'
+import { createSyncGuiasJob } from './jobs/syncGuiasJob.js'
 
 dotenv.config()
 
@@ -281,6 +282,29 @@ app.post('/api/artsoft/guias/sync', verifyJWT, async (req, res) => {
   }
 })
 
-app.listen(port, () => {
+const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
+
+  // Iniciar sync job agendado
+  const cronEnabled = process.env.CRON_ENABLED !== 'false'
+  const cronSchedule = process.env.CRON_SCHEDULE || '0 2 * * *'  // 2 AM UTC daily
+
+  if (cronEnabled) {
+    const syncJob = createSyncGuiasJob(pool, {
+      enabled: true,
+      schedule: cronSchedule,
+    })
+    await syncJob.start()
+  } else {
+    console.log('[SYNC-JOB] Desabilitado (set CRON_ENABLED=true para ativar)')
+  }
+})
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM: encerrando…')
+  server.close(() => {
+    console.log('Servidor encerrado.')
+    process.exit(0)
+  })
 })
