@@ -5,6 +5,7 @@
  */
 
 import assert from "assert";
+import { describe, it } from "node:test";
 import { parseXml, texto, textoDe, comoLista, escaparXml, ErroXmlArtsoft } from "../xml.js";
 
 describe("xml.js", () => {

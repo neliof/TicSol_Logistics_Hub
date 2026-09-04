@@ -5,6 +5,7 @@
  */
 
 import assert from "assert";
+import { describe, it } from "node:test";
 import { parseGuiasResponse, ErroParserGuia } from "../parser.js";
 
 describe("parser.js", () => {

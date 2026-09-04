@@ -8,6 +8,7 @@
  */
 
 import assert from "assert";
+import { describe, it } from "node:test";
 import { sincronizarGuias, executarPedidoArtsoft } from "../sync.js";
 
 describe("sync.js", () => {

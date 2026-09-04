@@ -11,20 +11,23 @@
  *   - config de ARTSOFT em logistics.configuracao
  */
 
+import dotenv from 'dotenv'
 import pkg from 'pg'
 import { sincronizarGuias } from './guias/sync.js'
+
+dotenv.config()
 
 const { Client } = pkg
 
 const args = process.argv.slice(2)
-const empresaId = parseInt(
-  args[args.indexOf('--empresa-id') + 1] || process.env.EMPRESA_ID || '1',
-  10
-)
+const empresaId =
+  args[args.indexOf('--empresa-id') + 1] || process.env.EMPRESA_ID || ''
 const dryRun = args.includes('--dry-run')
 
-if (isNaN(empresaId)) {
-  console.error('ERROR: empresa-id deve ser um número')
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+if (!UUID_RE.test(empresaId)) {
+  console.error('ERROR: empresa-id deve ser um UUID')
+  console.error('       ex: --empresa-id 11111111-1111-1111-1111-111111111111')
   process.exit(1)
 }
 

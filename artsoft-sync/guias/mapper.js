@@ -76,6 +76,38 @@ function validarDocumento(doc) {
  * @param {object} doc             documento parseado
  * @returns {Promise<{documento_id: number, criado: boolean}>}
  */
+/**
+ * Converte o TpSAFT do ARTSOFT no enum logistics.tipo_documento.
+ *
+ * @param {string} tpsaft   ex: 'GT', 'GR'
+ * @returns {string}        valor do enum tipo_documento
+ */
+export function tipoDocumentoDeTpSaft(tpsaft) {
+  switch (String(tpsaft || "").trim().toUpperCase()) {
+    case "GT":
+      return "guia_transporte";
+    case "GR":
+      return "guia_remessa";
+    case "FT":
+      return "fatura";
+    default:
+      // Guias de tipos menos comuns (GA/GC/GD) entram como guia de transporte.
+      return "guia_transporte";
+  }
+}
+
+/**
+ * Converte uma data ARTSOFT (AAAAMMDD) em ISO (AAAA-MM-DD).
+ *
+ * @param {string} valor
+ * @returns {string|null}
+ */
+function dataArtsoftParaIso(valor) {
+  const s = String(valor || "").trim();
+  if (!/^\d{8}$/.test(s)) return null;
+  return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`;
+}
+
 async function upsertDocumento(client, empresaId, doc) {
   validarDocumento(doc);
 
@@ -94,43 +126,52 @@ async function upsertDocumento(client, empresaId, doc) {
     dados_extra,
   } = doc;
 
-  // UPSERT: se já existir (serie, numero), atualiza; se não, insere
-  // Chave natural: (empresa_id, serie, numero)
+  const tipo = tipoDocumentoDeTpSaft(tipo_saft);
+
+  // O número guardado é o DocID do ARTSOFT (ex: 'V990/20261445'), único por
+  // série; a chave natural da tabela é (empresa_id, tipo, numero).
+  const numeroDoc =
+    String(doc_id_artsoft || "").trim() ||
+    `${String(serie).trim()}/${String(numero).trim()}`;
+
+  // A tabela não tem colunas para os campos logísticos (matrícula, moradas,
+  // peso, volumes) — vão em conteudo_xml como JSON, junto do resto do extra.
+  const extra = {
+    serie: String(serie).trim(),
+    numero: String(numero).trim(),
+    terceiro_numero: terceiro_numero || null,
+    terceiro_filial: terceiro_filial || null,
+    terceiro_nome: terceiro_nome || null,
+    terceiro_nif: terceiro_nif || null,
+    observacoes: observacoes || null,
+    pedido_origem: pedido_origem || null,
+    ...(dados_extra || {}),
+  };
+
   const res = await client.query(
     `
     INSERT INTO logistics.documento (
-      empresa_id, serie, numero, doc_id_artsoft, data_documento,
-      tipo_saft, terceiro_numero, terceiro_filial, terceiro_nome, terceiro_nif,
-      observacoes, pedido_origem, dados_extra, sincronizado_em, origem_sistema
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), 'ARTSOFT')
-    ON CONFLICT (empresa_id, serie, numero) DO UPDATE SET
-      doc_id_artsoft = EXCLUDED.doc_id_artsoft,
-      data_documento = EXCLUDED.data_documento,
-      tipo_saft = EXCLUDED.tipo_saft,
-      terceiro_numero = EXCLUDED.terceiro_numero,
-      terceiro_filial = EXCLUDED.terceiro_filial,
-      terceiro_nome = EXCLUDED.terceiro_nome,
-      terceiro_nif = EXCLUDED.terceiro_nif,
-      observacoes = EXCLUDED.observacoes,
-      pedido_origem = EXCLUDED.pedido_origem,
-      dados_extra = EXCLUDED.dados_extra,
+      empresa_id, tipo, numero, data_emissao, conteudo_xml,
+      origem_serie, origem_doc_id, origem_tpsaft, origem_sistema, sincronizado_em
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ARTSOFT', NOW())
+    ON CONFLICT (empresa_id, tipo, numero) DO UPDATE SET
+      data_emissao = EXCLUDED.data_emissao,
+      conteudo_xml = EXCLUDED.conteudo_xml,
+      origem_serie = EXCLUDED.origem_serie,
+      origem_doc_id = EXCLUDED.origem_doc_id,
+      origem_tpsaft = EXCLUDED.origem_tpsaft,
       sincronizado_em = NOW()
     RETURNING id, (xmax = 0) AS criado_novo
     `,
     [
       empresaId,
+      tipo,
+      numeroDoc,
+      dataArtsoftParaIso(data_docum) || new Date().toISOString(),
+      JSON.stringify(extra),
       String(serie).trim(),
-      String(numero).trim(),
-      String(doc_id_artsoft || "").trim(),
-      data_docum || null,
+      String(doc_id_artsoft || "").trim() || null,
       tipo_saft || null,
-      terceiro_numero || null,
-      terceiro_filial || null,
-      terceiro_nome || null,
-      terceiro_nif || null,
-      observacoes || null,
-      pedido_origem || null,
-      dados_extra ? JSON.stringify(dados_extra) : null,
     ]
   );
 
@@ -166,13 +207,13 @@ async function atualizarLinhas(client, documento_id, linhas) {
       [documento_id]
     );
 
-    // Inserir novas
+    // Inserir novas. A tabela não tem colunas para nº de registo de artigo,
+    // peso ou EAN13 — esses vão em dados_extra.
     const insert_sql = `
       INSERT INTO logistics.linha_documento (
         documento_id, nr_linha, nr_lancamento, artigo_codigo, descricao,
-        quantidade, unidade, observacoes, artigo_nrreg, peso, ean13,
-        dados_extra
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        quantidade, unidade, observacoes, dados_extra
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `;
 
     let inseridas = 0;
@@ -191,19 +232,26 @@ async function atualizarLinhas(client, documento_id, linhas) {
         dados_extra,
       } = linha;
 
+      const codigo = String(artigo_codigo || "").trim();
+      if (!codigo) continue; // artigo_codigo é NOT NULL
+
+      const extra = { ...(dados_extra || {}) };
+      if (artigo_nrreg) extra.artigo_nrreg = artigo_nrreg;
+      if (peso) extra.peso = peso;
+      if (ean13) extra.ean13 = ean13;
+
+      const quantidadeNum = Number.parseFloat(String(quantidade ?? ""));
+
       await client.query(insert_sql, [
         documento_id,
-        nr_linha || null,
+        nr_linha ?? 0,
         nr_lancamento || null,
-        String(artigo_codigo || "").trim() || null,
+        codigo,
         descricao || null,
-        quantidade || null,
+        Number.isFinite(quantidadeNum) ? quantidadeNum : null,
         unidade || null,
         observacoes || null,
-        artigo_nrreg || null,
-        peso || null,
-        ean13 || null,
-        dados_extra ? JSON.stringify(dados_extra) : null,
+        Object.keys(extra).length > 0 ? JSON.stringify(extra) : null,
       ]);
       inseridas++;
     }
@@ -307,16 +355,28 @@ export async function registrarExecucao(client, empresaId, config) {
     estado,
     correlation_id = null,
     num_paginas = 1,
+    tipo = "guias",
+    endpoint = "Queries/Query",
   } = config;
 
   const res = await client.query(
     `
     INSERT INTO logistics.sincronizacao_execucao (
-      empresa_id, request_xml, response_xml, estado, correlation_id, num_paginas
-    ) VALUES ($1, $2, $3, $4, $5, $6)
+      empresa_id, tipo, endpoint, request_xml, response_xml, estado,
+      correlation_id, pagina
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING id
     `,
-    [empresaId, request_xml || null, response_xml || null, estado, correlation_id, num_paginas]
+    [
+      empresaId,
+      tipo,
+      endpoint,
+      request_xml || null,
+      response_xml || null,
+      estado,
+      correlation_id,
+      num_paginas,
+    ]
   );
 
   return res.rows[0].id;

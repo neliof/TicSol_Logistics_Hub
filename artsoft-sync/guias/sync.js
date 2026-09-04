@@ -35,145 +35,15 @@ import {
 import { cicloComToken, extrairTokenProximaPagina } from "../artsoft/pagination.js";
 import { parseGuiasResponse, ErroParserGuia } from "./parser.js";
 import { processarDocumentos, registrarExecucao } from "./mapper.js";
+import { executarPedidoArtsoft } from "../artsoft/connection.js";
+
+export { executarPedidoArtsoft };
 
 export class ErroSincronizacaoGuias extends Error {
   constructor(mensagem) {
     super(mensagem);
     this.name = "ErroSincronizacaoGuias";
   }
-}
-
-/**
- * Autentica um pedido HTTP com Digest SHA1 (ARTSOFT WebServer).
- *
- * Portado de `_artsoft_digest_auth` em `artsoft_sync_service.py`.
- *
- * @param {object} config
- * @param {string} config.utilizador
- * @param {string} config.senha
- * @param {string} config.metodo         'GET'|'POST'
- * @param {string} config.uri            '/Queries/Query'
- * @param {string} config.realm          'ARTSOFT'
- * @param {string} config.nonce          do servidor
- * @param {string} [config.qop]          'auth'
- * @returns {string}                     Authorization header value
- */
-function construirDigestAuth({
-  utilizador,
-  senha,
-  metodo,
-  uri,
-  realm,
-  nonce,
-  qop = null,
-}) {
-  const ha1 = createHash("sha1")
-    .update(`${utilizador}:${realm}:${senha}`)
-    .digest("hex");
-  const ha2 = createHash("sha1")
-    .update(`${metodo}:${uri}`)
-    .digest("hex");
-
-  let resposta;
-  if (qop === "auth") {
-    const nc = "00000001";
-    const cnonce = crypto.randomBytes(8).toString("hex");
-    resposta = createHash("sha1")
-      .update(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`)
-      .digest("hex");
-    return (
-      `Digest username="${utilizador}", realm="${realm}", ` +
-      `nonce="${nonce}", uri="${uri}", qop=${qop}, nc=${nc}, ` +
-      `cnonce="${cnonce}", response="${resposta}", algorithm=SHA-1`
-    );
-  } else {
-    resposta = createHash("sha1")
-      .update(`${ha1}:${nonce}:${ha2}`)
-      .digest("hex");
-    return (
-      `Digest username="${utilizador}", realm="${realm}", ` +
-      `nonce="${nonce}", uri="${uri}", response="${resposta}", algorithm=SHA-1`
-    );
-  }
-}
-
-/**
- * Executa um pedido HTTP ao ARTSOFT WebServer.
- *
- * Suporta: autenticação Digest SHA1, retry com `WWW-Authenticate` header.
- *
- * @param {object} config
- * @param {string} config.host
- * @param {number} config.porta
- * @param {string} config.utilizador
- * @param {string} config.senha
- * @param {string} config.xml            corpo do pedido
- * @param {number} [config.timeout]      ms, default 30000
- * @returns {Promise<string>}            XML de resposta
- */
-export async function executarPedidoArtsoft({
-  host,
-  porta,
-  utilizador,
-  senha,
-  xml,
-  timeout = 30000,
-}) {
-  const url = new URL(`http://${host}:${porta}/Queries/Query`);
-
-  // Tentar sem auth primeiro (alguns ARTSOFT não requerem)
-  let resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/xml;charset=utf-8",
-    },
-    body: xml,
-    signal: AbortSignal.timeout(timeout),
-  });
-
-  // Se 401, extrair nonce de WWW-Authenticate e retry com Digest
-  if (resp.status === 401) {
-    const wwwAuth = resp.headers.get("WWW-Authenticate");
-    if (wwwAuth && wwwAuth.includes("Digest")) {
-      const nonceMatch = wwwAuth.match(/nonce="([^"]+)"/);
-      const realmMatch = wwwAuth.match(/realm="([^"]+)"/);
-      const qopMatch = wwwAuth.match(/qop="([^"]+)"/);
-
-      if (nonceMatch && realmMatch) {
-        const nonce = nonceMatch[1];
-        const realm = realmMatch[1];
-        const qop = qopMatch ? qopMatch[1] : null;
-
-        const auth = construirDigestAuth({
-          utilizador,
-          senha,
-          metodo: "POST",
-          uri: "/Queries/Query",
-          realm,
-          nonce,
-          qop: qop === "auth" ? "auth" : null,
-        });
-
-        resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/xml;charset=utf-8",
-            Authorization: auth,
-          },
-          body: xml,
-          signal: AbortSignal.timeout(timeout),
-        });
-      }
-    }
-  }
-
-  if (!resp.ok) {
-    throw new ErroSincronizacaoGuias(
-      `HTTP ${resp.status} a ${url}: ${resp.statusText}`
-    );
-  }
-
-  return resp.text();
 }
 
 /**
@@ -216,12 +86,17 @@ async function carregarConfiguracao(client, empresaId) {
     host,
     porta: Number.parseInt(String(porta), 10),
     utilizador,
-    senha: config["artsoft.senha"] || "",
+    // A password nunca se guarda em logistics.configuracao — vem do ambiente.
+    senha: process.env.ARTSOFT_SENHA || config["artsoft.senha"] || "",
     timeout: inteiroConfig(config, "artsoft.timeout", 30000, { min: 5000, max: 120000 }),
     series: seriesRes.series,
     tpsaft_validos: tpsaftValidos,
     pageSize: inteiroConfig(config, "guias.page_size", 50, { min: 10, max: 1000 }),
     maxPaginas: inteiroConfig(config, "guias.max_pages", 300, { min: 1, max: 10000 }),
+    diasRetroativos: inteiroConfig(config, "guias.dias_retroativos", 30, {
+      min: 1,
+      max: 3650,
+    }),
     formatoData: config["guias.formato_data"] || "ddmmaaaa",
   };
 }
@@ -248,51 +123,95 @@ async function carregarMapeamentos(client, empresaId, contexto) {
 }
 
 /**
- * Constrói o XML de pedido para guias.
+ * Formata uma Date em AAAAMMDD, como o ARTSOFT espera nos filtros de data.
  *
- * Filtro: `DocFch|Serie IN (V960;V980)` ou equivalente, dependendo do ARTSOFT.
+ * @param {Date} data
+ * @returns {string} ex: '20260801'
+ */
+function formatarDataArtsoft(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}${mes}${dia}`;
+}
+
+/**
+ * Constrói o filtro de cabeçalho para guias.
+ *
+ * Formato validado contra ARTSOFT V26 (chave `DocData` de DocFch):
+ *   DocFch|DocData|TpDoc=<serieMin>:<serieMax>|Data=<AAAAMMDD>:<AAAAMMDD>
+ *   ^TerFch|Cliente|NrCli={%DocFch.Ter.Terceiro}|Filial={%DocFch.Ter.Filial}
+ *
+ * O `TpDoc` é um intervalo, não uma lista: as séries configuradas são
+ * ordenadas e usadas como limites. A correlação `^TerFch` dá acesso aos
+ * campos `%TerFch.*` (nome, NIF, morada do terceiro).
  *
  * @param {object} config
- * @param {Array<string>} config.series       ['V960', 'V980', ...]
+ * @param {Array<string>} config.series     ex: ['V990']
+ * @param {string} config.dataInicio        AAAAMMDD
+ * @param {string} config.dataFim           AAAAMMDD
+ * @returns {string}
+ */
+function construirFiltroCabecalho({ series, dataInicio, dataFim }) {
+  const ordenadas = [...series].sort();
+  const serieMin = ordenadas[0];
+  const serieMax = ordenadas[ordenadas.length - 1];
+
+  return (
+    `DocFch|DocData|TpDoc=${serieMin}:${serieMax}|Data=${dataInicio}:${dataFim}` +
+    ` ^TerFch|Cliente|NrCli={%DocFch.Ter.Terceiro}|Filial={%DocFch.Ter.Filial}`
+  );
+}
+
+/**
+ * Constrói o XML de pedido para guias (padrão C002: cabeçalho + linhas
+ * numa única chamada).
+ *
+ * @param {object} config
+ * @param {Array<string>} config.series        ex: ['V990']
  * @param {number} config.pageSize
+ * @param {string} config.dataInicio           AAAAMMDD
+ * @param {string} config.dataFim              AAAAMMDD
  * @param {Array} config.mapeamentosCabecalho  mapeamentos para cabeçalho
- * @param {Array} config.mapeamentosLinhas    mapeamentos para linhas
+ * @param {Array} config.mapeamentosLinhas     mapeamentos para linhas
  * @returns {string} XML pronto para envio
  */
 function construirPedidoGuias({
   series,
   pageSize,
+  dataInicio,
+  dataFim,
   mapeamentosCabecalho,
   mapeamentosLinhas,
 }) {
-  // Filtro de série — ARTSOFT aceita IN(val1;val2;...)
-  const filtroSerie = `DocFch|${series.join(";")}`;
+  const filtroCabecalho = construirFiltroCabecalho({
+    series,
+    dataInicio,
+    dataFim,
+  });
 
-  // Defcol cabeçalho
   const defcolCabecalho = construirDefcolLinhas(mapeamentosCabecalho, {
     indentacao: "        ",
   });
 
-  // Subconsulta de linhas (Lans)
-  const defcolLinhas = construirDefcolLinhas(mapeamentosLinhas, {
-    indentacao: "            ",
-  });
+  // Subconsulta de linhas correlacionada com o cabeçalho, mais correlação
+  // com StkFch para os campos de ficha de artigo (%StkFch.*).
   const subconsultaLinhas = construirSubconsulta({
     tag: "Lans",
     nome: "lan",
-    filtro: `DocLan|^DocFch|${series.join(";")}`, // correlação com cabeçalho
+    filtro:
+      "DocLan|Document|TpDoc={%DocFch.Doc.Serie}|NrDoc={%DocFch.Doc.NrDoc}" +
+      " ^StkFch|Codigo={%DocLan.Cod.Codigo}",
     mapeamentos: mapeamentosLinhas,
     indentacao: "        ",
   });
 
-  // Corpo completo
   const corpo = `${defcolCabecalho}\n${subconsultaLinhas}`;
 
-  // Envelope
   return construirPedidoXml({
-    filtro: filtroSerie,
+    filtro: filtroCabecalho,
     pageSize,
-    nome: "DocFch",
+    nome: "rec",
     corpoDefcol: corpo,
   });
 }
@@ -314,7 +233,9 @@ function construirPedidoGuias({
  */
 export async function sincronizarGuias(client, empresaId, { logger = () => {} } = {}) {
   const correlationId = crypto.randomUUID();
-  let estadoFinal = "completo";
+  // Estados aceites pela constraint de logistics.sincronizacao_execucao:
+  // ok | erro_comunicacao | erro_autenticacao | erro_xml | erro_funcional | incompleto
+  let estadoFinal = "ok";
   let xmlPedido = "";
   let xmlResposta = "";
 
@@ -336,25 +257,50 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {} } 
       );
     }
 
-    logger(`[${correlationId}] Construindo pedido…`);
+    // Janela de datas: hoje menos `guias.dias_retroativos` até hoje.
+    const hoje = new Date();
+    const inicio = new Date(hoje);
+    inicio.setDate(inicio.getDate() - cfg.diasRetroativos);
+    const dataInicio = formatarDataArtsoft(inicio);
+    const dataFim = formatarDataArtsoft(hoje);
+
+    logger(
+      `[${correlationId}] Construindo pedido… ` +
+        `séries=${cfg.series.join(";")} datas=${dataInicio}:${dataFim}`
+    );
     xmlPedido = construirPedidoGuias({
       series: cfg.series,
       pageSize: cfg.pageSize,
+      dataInicio,
+      dataFim,
       mapeamentosCabecalho: mapCabecalho,
       mapeamentosLinhas: mapLinhas,
+    });
+
+    // Corpo do defcol (sem as tags <defcol>), para reconstruir cada página.
+    const corpoDefcol =
+      xmlPedido.match(/<defcol>\n([\s\S]*)\n {4}<\/defcol>/)?.[1] || "";
+
+    const filtroBase = construirFiltroCabecalho({
+      series: cfg.series,
+      dataInicio,
+      dataFim,
     });
 
     logger(`[${correlationId}] Ciclo de paginação iniciado…`);
     const resultPaginacao = await cicloComToken({
       pedidoInicial: {
-        filtro: `DocFch|${cfg.series.join(";")}`,
+        filtro: filtroBase,
         pageSize: cfg.pageSize,
-        nome: "DocFch",
-        corpoDefcol: "", // já está no XML
+        nome: "rec",
+        corpoDefcol,
       },
       parseador: (xml) => {
         xmlResposta = xml;
-        return parseXml(xml);
+        // parseXml devolve o documento com o elemento raiz incluído
+        // ({root: {...}}); o resto do ciclo trabalha sobre o conteúdo.
+        const doc = parseXml(xml);
+        return doc.root ?? doc;
       },
       extrairRegistos: (raiz) => {
         // Extract raw records; parseGuiasResponse fará validação
@@ -367,7 +313,7 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {} } 
           filtro: pedidoConfig.filtro,
           pageSize: pedidoConfig.pageSize,
           nome: pedidoConfig.nome,
-          corpoDefcol: xmlPedido.match(/<defcol>[\s\S]*<\/defcol>/)?.[0] || "",
+          corpoDefcol: pedidoConfig.corpoDefcol,
         }),
       executarPedido: (xml) =>
         executarPedidoArtsoft({
@@ -382,10 +328,10 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {} } 
       logger,
     });
 
-    if (resultPaginacao.estado !== "completo") {
-      estadoFinal = resultPaginacao.estado || "incompleto";
+    if (resultPaginacao.estado && resultPaginacao.estado !== "completo") {
+      estadoFinal = "incompleto";
       logger(
-        `[${correlationId}] Paginação terminou com estado: ${estadoFinal}`
+        `[${correlationId}] Paginação terminou com estado: ${resultPaginacao.estado}`
       );
     }
 

@@ -92,15 +92,18 @@ function parseDocumento(no) {
     terceiro_nif: textoDe(no, "TerNIF", "nif", "Ter.NIF"),
     observacoes: textoDe(no, "DocObs", "Doc.Obs"),
     pedido_origem: textoDe(no, "DocPedido", "Doc.Pedido"),
-    // CDU e outros campos ainda por confirmar, vão para dados_extra
-    dados_extra: extractCDU(no),
+    // CDU, campos logísticos e outros extras não têm coluna própria.
+    dados_extra: {
+      ...extractCDU(no),
+      ...extractLogistica(no),
+    },
   };
 
-  // Linhas
+  // Linhas — a subconsulta declara name='lan', logo os registos vêm em <lan>.
   const lansNode = no.Lans;
   const linhas = [];
   if (lansNode) {
-    const recsLan = comoLista(lansNode.rec || lansNode.rec);
+    const recsLan = comoLista(lansNode.lan || lansNode.rec || lansNode.row);
     let nrLinha = 0;
     for (const lan of recsLan) {
       if (!lan || typeof lan !== "object") continue;
@@ -142,6 +145,38 @@ function parseLinha(lan, nrLinha) {
   };
 
   return linha;
+}
+
+/**
+ * Extrai os campos logísticos do cabeçalho (matrícula, moradas de carga e
+ * descarga, data/hora de carga, peso, volumes).
+ *
+ * As tags correspondem às produzidas por `construirDefcolLinhas` a partir dos
+ * `form_path` em `logistics.mapeamento_campo`. Só entram no resultado os
+ * campos com valor — assim um documento sem matrícula não guarda a chave.
+ *
+ * @param {Record<string, unknown>} no
+ * @returns {object}
+ */
+function extractLogistica(no) {
+  const campos = {
+    matricula: textoDe(no, "Matricula", "Inf.Matricula"),
+    morada_carga: textoDe(no, "MoradaCarga", "LocCarga", "Doc.LocCarga"),
+    morada_descarga: textoDe(no, "MoradaDescarga", "LocDesc", "Doc.LocDesc"),
+    data_hora_carga: textoDe(no, "DataHoraCarga", "DataCarga", "Doc.DataCarga"),
+    hora_carga: textoDe(no, "HoraCarga", "Doc.HoraCarga"),
+    peso: textoDe(no, "Peso", "PesoBr", "Log.PesoBr"),
+    peso_liquido: textoDe(no, "PesoLiq", "Log.PesoLiq"),
+    volume: textoDe(no, "Volume", "Log.Volume"),
+    volumes: textoDe(no, "Volumes", "NrVol", "Log.NrVol"),
+  };
+
+  const resultado = {};
+  for (const [chave, valor] of Object.entries(campos)) {
+    const v = String(valor ?? "").trim();
+    if (v !== "") resultado[chave] = v;
+  }
+  return resultado;
 }
 
 /**
