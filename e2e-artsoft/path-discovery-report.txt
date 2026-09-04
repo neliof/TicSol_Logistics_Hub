@@ -1,0 +1,95 @@
+DataDocum (Doc.DataDocum)
+  Path: %DocFch.Doc.DataDocum
+  ❌ ERRO (path invalido)
+
+Data (Doc.Data)
+  Path: %DocFch.Doc.Data
+  ❌ ERRO (path invalido)
+
+DocData (Doc.DocData)
+  Path: %DocFch.Doc.DocData
+  ❌ ERRO (path invalido)
+
+TerNIF (Ter.NIF)
+  Path: %DocFch.Ter.NIF
+  ❌ ERRO (path invalido)
+
+NIF (Ter.Nif)
+  Path: %DocFch.Ter.Nif
+  ❌ ERRO (path invalido)
+
+Nif (Ter.nif)
+  Path: %DocFch.Ter.nif
+  ❌ ERRO (path invalido)
+
+Matricula (Logis.Matricula)
+  Path: %DocFch.Logis.Matricula
+  ❌ ERRO (path invalido)
+
+Matricula (Logis.Matricula_Veiculo)
+  Path: %DocFch.Logis.Matricula_Veiculo
+  ❌ ERRO (path invalido)
+
+Matricula (Transp.Matricula)
+  Path: %DocFch.Transp.Matricula
+  ❌ ERRO (path invalido)
+
+EndCarga (Logis.EndCarga)
+  Path: %DocFch.Logis.EndCarga
+  ❌ ERRO (path invalido)
+
+EndCarga (Logis.End_Carga)
+  Path: %DocFch.Logis.End_Carga
+  ❌ ERRO (path invalido)
+
+EndCarga (Logis.Morada_Carga)
+  Path: %DocFch.Logis.Morada_Carga
+  ❌ ERRO (path invalido)
+
+EndDescarga (Logis.EndDescarga)
+  Path: %DocFch.Logis.EndDescarga
+  ❌ ERRO (path invalido)
+
+EndDescarga (Logis.End_Descarga)
+  Path: %DocFch.Logis.End_Descarga
+  ❌ ERRO (path invalido)
+
+EndDescarga (Logis.Morada_Descarga)
+  Path: %DocFch.Logis.Morada_Descarga
+  ❌ ERRO (path invalido)
+
+Peso (Logis.Peso)
+  Path: %DocFch.Logis.Peso
+  ❌ ERRO (path invalido)
+
+Peso (Logis.Peso_Total)
+  Path: %DocFch.Logis.Peso_Total
+  ❌ ERRO (path invalido)
+
+Peso (Transp.Peso)
+  Path: %DocFch.Transp.Peso
+  ❌ ERRO (path invalido)
+
+Volumes (Logis.Volumes)
+  Path: %DocFch.Logis.Volumes
+  ❌ ERRO (path invalido)
+
+Volumes (Logis.Num_Volumes)
+  Path: %DocFch.Logis.Num_Volumes
+  ❌ ERRO (path invalido)
+
+Volumes (Transp.Volumes)
+  Path: %DocFch.Transp.Volumes
+  ❌ ERRO (path invalido)
+
+DataHora (Logis.DataHora)
+  Path: %DocFch.Logis.DataHora
+  ❌ ERRO (path invalido)
+
+DataHora (Logis.Data_Hora)
+  Path: %DocFch.Logis.Data_Hora
+  ❌ ERRO (path invalido)
+
+DataHora (Transp.DataHora)
+  Path: %DocFch.Transp.DataHora
+  ❌ ERRO (path invalido)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?><root err="8">
+XML error «ErrVarNotFound», node «/root/defcol/DataDocum» [%DocFch.Doc.DataDocum]
+XML error «ErrVarNotFound», node «/root/defcol/TerNIF» [%DocFch.Ter.NIF]
+XML error «ErrVarNotFound», node «/root/defcol/Matricula» [%DocFch.Logis.Matricula]
+XML error «ErrVarNotFound», node «/root/defcol/EndCarga» [%DocFch.Logis.EndCarga]
+XML error «ErrVarNotFound», node «/root/defcol/EndDescarga» [%DocFch.Logis.EndDescarga]
+XML error «ErrVarNotFound», node «/root/defcol/Peso» [%DocFch.Logis.Peso]
+XML error «ErrVarNotFound», node «/root/defcol/Volumes» [%DocFch.Logis.Volumes]
+XML error «ErrVarNotFound», node «/root/defcol/DataHora» [%DocFch.Logis.DataHora]
+</root>
