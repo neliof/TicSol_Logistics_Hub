@@ -6,7 +6,7 @@
  */
 
 import cron from 'node-cron'
-import { sincronizarGuias } from '../artsoft-sync/guias/sync.js'
+import { sincronizarGuias } from '../../artsoft-sync/guias/sync.js'
 import { alertarSyncFailure } from '../utils/alerting.js'
 
 export class SyncGuiasJob {

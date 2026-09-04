@@ -4,3 +4,6 @@ postgrest.conf
 *.log
 dist/
 .DS_Store
+
+# Capturas temporárias de revisão do guia
+docs/imagens/_revisao-*.png

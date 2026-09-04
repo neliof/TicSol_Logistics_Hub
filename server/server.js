@@ -86,23 +86,43 @@ const verifyJWT = (req, res, next) => {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const setEmpresaContext = async (req, res, next) => {
   try {
     if (!req.user || !req.user.empresa_id) {
       return res.status(403).json({ error: 'No empresa_id in token' })
     }
 
-    const empresaId = parseInt(req.user.empresa_id, 10)
-    if (isNaN(empresaId)) {
+    const empresaId = String(req.user.empresa_id)
+    if (!UUID_RE.test(empresaId)) {
       return res.status(403).json({ error: 'Invalid empresa_id' })
     }
 
     const client = await pool.connect()
     try {
-      await client.query(
-        'SELECT logistics.set_empresa_context($1)',
-        [empresaId]
-      )
+      // As políticas RLS leem a empresa de logistics.jwt_empresa_id(), que por
+      // sua vez lê o GUC request.jwt.claims (convenção do PostgREST).
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
+      // A ligação volta ao pool partilhada; limpar o contexto ao libertar
+      // evita que um pedido sem este middleware herde a empresa anterior.
+      const release = client.release.bind(client)
+      client.release = async () => {
+        try {
+          await client.query('SELECT set_config($1, $2, false)', [
+            'request.jwt.claims',
+            '',
+          ])
+        } catch {
+          // Ligação já inutilizável: o pool descarta-a de qualquer forma.
+        }
+        release()
+      }
+
       req.dbClient = client
     } catch (err) {
       client.release()
@@ -159,6 +179,43 @@ const validateTableName = (table) => {
   }
   return table.toLowerCase()
 }
+
+/**
+ * Linhas de um documento. Existe à parte da rota genérica porque esta não
+ * filtra, e trazer todas as linhas da empresa para escolher as de um documento
+ * não escala.
+ */
+app.get(
+  '/rest/v1/documento/:id/linhas',
+  verifyJWT,
+  setEmpresaContext,
+  async (req, res) => {
+    try {
+      const { id } = req.params
+      if (!UUID_RE.test(id)) {
+        return res.status(400).json({ error: 'Invalid documento id' })
+      }
+
+      // A RLS de linha_documento segue o documento; o join garante que uma
+      // linha de outra empresa nunca é devolvida.
+      const result = await req.dbClient.query(
+        `SELECT l.*
+           FROM logistics.linha_documento l
+           JOIN logistics.documento d ON d.id = l.documento_id
+          WHERE l.documento_id = $1
+          ORDER BY l.nr_linha, l.nr_lancamento`,
+        [id]
+      )
+
+      res.json(result.rows)
+    } catch (err) {
+      console.error('GET /rest/v1/documento/:id/linhas error:', err.message)
+      res.status(400).json({ error: err.message })
+    } finally {
+      if (req.dbClient) req.dbClient.release()
+    }
+  }
+)
 
 app.get('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
   try {
@@ -274,7 +331,7 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
     try {
       const userRes = await client.query(
         `SELECT id, empresa_id, nome, ativo, senha_hash
-         FROM logistics.usuario
+         FROM logistics.utilizador
          WHERE email = $1`,
         [email.toLowerCase().trim()]
       )

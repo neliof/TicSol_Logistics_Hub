@@ -8,37 +8,10 @@
  */
 
 import rateLimit from 'express-rate-limit'
-import RedisStore from 'rate-limit-redis'
-import redis from 'redis'
 
-// Store em memória (production: usar Redis)
-const store = new Map()
-
-function getMemoryStore() {
-  return {
-    increment(key) {
-      const now = Date.now()
-      const data = store.get(key) || { count: 0, resetTime: now + 15 * 60 * 1000 }
-
-      if (now > data.resetTime) {
-        data.count = 0
-        data.resetTime = now + 15 * 60 * 1000
-      }
-
-      data.count++
-      store.set(key, data)
-
-      return {
-        totalHits: data.count,
-        resetTime: new Date(data.resetTime),
-      }
-    },
-
-    resetKey(key) {
-      store.delete(key)
-    },
-  }
-}
+// Sem `store` explícito, o express-rate-limit usa o seu MemoryStore interno —
+// suficiente para uma instância única. Para várias instâncias, ver
+// createRedisLimiter() no fim deste ficheiro.
 
 /**
  * Rate limiter para /auth/login (brute force protection).
@@ -52,7 +25,6 @@ export const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip,
-  store: getMemoryStore(),
   skip: (req) => process.env.RATE_LIMIT_ENABLED === 'false',
 })
 
@@ -68,7 +40,6 @@ export const syncLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `${req.user?.usuario_id || req.ip}`,
-  store: getMemoryStore(),
   skip: (req) => process.env.RATE_LIMIT_ENABLED === 'false',
 })
 
@@ -84,19 +55,23 @@ export const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `${req.user?.usuario_id || req.ip}`,
-  store: getMemoryStore(),
   skip: (req) => process.env.RATE_LIMIT_ENABLED === 'false',
 })
 
 /**
  * Criar limiter com Redis (para production + multi-instance).
  *
+ * `rate-limit-redis` é uma dependência opcional: só é carregada quando esta
+ * função é chamada, para que o servidor arranque em desenvolvimento (store em
+ * memória) sem ter o pacote instalado.
+ *
  * Uso:
  *   const redisClient = redis.createClient({...})
- *   const limiter = createRedisLimiter(redisClient, {...})
+ *   const limiter = await createRedisLimiter(redisClient, {...})
  *   app.post('/auth/login', limiter, ...)
  */
-export function createRedisLimiter(redisClient, options) {
+export async function createRedisLimiter(redisClient, options) {
+  const { default: RedisStore } = await import('rate-limit-redis')
   return rateLimit({
     store: new RedisStore({
       client: redisClient,

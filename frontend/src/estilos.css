@@ -1,0 +1,394 @@
+@import "../shared/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---------- Entrada ---------- */
+
+.ecra-entrada {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.cartao-entrada {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cartao-entrada h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--steel-dark);
+}
+
+.cartao-entrada .subtitulo {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+.cartao-entrada label {
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cartao-entrada input {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font: inherit;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.cartao-entrada input:focus-visible,
+.campo-procura:focus-visible {
+  outline: 2px solid var(--steel);
+  outline-offset: 1px;
+}
+
+.cartao-entrada .btn-primario {
+  margin-top: 20px;
+}
+
+/* ---------- Estrutura ---------- */
+
+.cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 0 24px;
+  height: 56px;
+}
+
+.marca {
+  font-weight: 700;
+  color: var(--steel-dark);
+  white-space: nowrap;
+}
+
+.navegacao {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.aba {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 17px 14px;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.aba:hover {
+  color: var(--ink);
+}
+
+.aba.ativa {
+  color: var(--steel-dark);
+  border-bottom-color: var(--steel);
+  font-weight: 600;
+}
+
+.utilizador {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.conteudo {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ---------- Botões ---------- */
+
+.btn-primario {
+  background: var(--steel);
+  color: #fff;
+  border: 1px solid var(--steel);
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primario:hover:not(:disabled) {
+  background: var(--steel-dark);
+}
+
+.btn-primario:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-secundario {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-secundario:hover {
+  border-color: var(--steel);
+}
+
+/* ---------- Barra de ações ---------- */
+
+.barra-acoes {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.campo-procura {
+  flex: 1;
+  max-width: 420px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font: inherit;
+  background: var(--panel);
+}
+
+.contagem {
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+/* ---------- Avisos ---------- */
+
+.alerta {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border-left: 3px solid;
+  margin-bottom: 14px;
+}
+
+.alerta-erro {
+  background: var(--red-bg);
+  border-left-color: var(--red);
+  color: var(--red);
+}
+
+.alerta-ok {
+  background: var(--green-bg);
+  border-left-color: var(--green);
+  color: var(--green);
+}
+
+.estado-vazio {
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 28px;
+  text-align: center;
+}
+
+/* ---------- Lista + detalhe ---------- */
+
+.painel-duplo {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.lista-guias {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.item-guia {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.item-guia:hover {
+  background: var(--paper);
+}
+
+.item-guia.ativo {
+  background: var(--paper);
+  box-shadow: inset 3px 0 0 var(--steel);
+}
+
+.item-numero {
+  font-weight: 600;
+  font-family: var(--font-data);
+}
+
+.item-data {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.item-cliente {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detalhe {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.detalhe h3 {
+  margin: 0 0 16px;
+  font-family: var(--font-data);
+  color: var(--steel-dark);
+}
+
+.detalhe h4 {
+  margin: 24px 0 10px;
+  font-size: 14px;
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.campos .largo {
+  grid-column: 1 / -1;
+}
+
+.campos dt {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.campos dd {
+  margin: 0;
+}
+
+.observacoes {
+  background: var(--amber-bg);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 18px 0 0;
+}
+
+/* ---------- Tabelas ---------- */
+
+.tabela-linhas {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+}
+
+.tabela-linhas th,
+.tabela-linhas td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabela-linhas th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tabela-linhas .num {
+  text-align: right;
+}
+
+.tabela-linhas .codigo {
+  font-family: var(--font-data);
+  font-size: 12px;
+}
+
+/* ---------- Etiquetas de estado ---------- */
+
+.etiqueta {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.etiqueta-ok {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.etiqueta-aviso {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.etiqueta-erro {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+/* ---------- Ecrãs estreitos ---------- */
+
+@media (max-width: 900px) {
+  .painel-duplo {
+    grid-template-columns: 1fr;
+  }
+
+  .lista-guias {
+    max-height: 300px;
+  }
+}
