@@ -1,0 +1,90 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ticsol-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ticsol_dev_password
+      POSTGRES_DB: ticsol_logistics_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticsol-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ticsol-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ticsol-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ticsol-api
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ticsol_logistics_hub
+      DB_USER: app_user
+      DB_PASSWORD: ticsol_dev_password
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      CRON_ENABLED: "true"
+      CRON_SCHEDULE: "0 2 * * *"
+      LOG_LEVEL: info
+      RATE_LIMIT_ENABLED: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./server:/app/server
+      - ./artsoft-sync:/app/artsoft-sync
+    networks:
+      - ticsol-network
+    command: npm start
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ticsol-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - ticsol-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ticsol-network:
+    driver: bridge

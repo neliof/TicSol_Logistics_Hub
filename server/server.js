@@ -3,8 +3,11 @@ import pkg from 'pg'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
+import swaggerJsdoc from 'swagger-jsdoc'
+import swaggerUi from 'swagger-ui-express'
 import { verifyPassword } from './utils/password.js'
 import { createSyncGuiasJob } from './jobs/syncGuiasJob.js'
+import { loginLimiter, syncLimiter, apiLimiter } from './middleware/rateLimiter.js'
 
 dotenv.config()
 
@@ -33,6 +36,35 @@ if (!process.env.DB_PASSWORD) {
 
 app.use(cors())
 app.use(express.json())
+
+// Swagger API Documentation
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'TicSol Logistics Hub API',
+      version: '1.0.0',
+      description: 'ARTSOFT transport guide synchronization API',
+    },
+    servers: [
+      { url: `http://localhost:${port}`, description: 'Development' },
+      { url: 'https://api.company.com', description: 'Production' },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  apis: ['./server.js'],
+}
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 const verifyJWT = (req, res, next) => {
   const authHeader = req.headers.authorization
@@ -209,7 +241,29 @@ app.post('/rpc/:func', verifyJWT, setEmpresaContext, async (req, res) => {
   }
 })
 
-app.post('/auth/login', async (req, res) => {
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login and get JWT token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Invalid credentials
+ */
+app.post('/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body
     if (!email || !password) {
@@ -260,7 +314,20 @@ app.post('/auth/login', async (req, res) => {
   }
 })
 
-app.post('/api/artsoft/guias/sync', verifyJWT, async (req, res) => {
+/**
+ * @swagger
+ * /api/artsoft/guias/sync:
+ *   post:
+ *     summary: Trigger manual ARTSOFT sync
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync triggered successfully
+ *       429:
+ *         description: Rate limit exceeded
+ */
+app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
     if (!req.user || !req.user.empresa_id) {
       return res.status(403).json({ error: 'No empresa_id in token' })
