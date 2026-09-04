@@ -3,6 +3,7 @@ import pkg from 'pg'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
+import { verifyPassword } from './utils/password.js'
 
 dotenv.config()
 
@@ -188,23 +189,49 @@ app.post('/rpc/:func', verifyJWT, setEmpresaContext, async (req, res) => {
 
 app.post('/auth/login', async (req, res) => {
   try {
-    const { username, password, empresa_id } = req.body
-    if (!username || !password || !empresa_id) {
-      return res.status(400).json({ error: 'Missing username, password, or empresa_id' })
+    const { email, password } = req.body
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Missing email or password' })
     }
 
-    // TODO: Validate username/password against usuarios table (with bcrypt hashing)
-    // For now: demo only (never use in production)
-    if (username === 'demo' && password === 'demo') {
+    const client = await pool.connect()
+    try {
+      const userRes = await client.query(
+        `SELECT id, empresa_id, nome, ativo, senha_hash
+         FROM logistics.usuario
+         WHERE email = $1`,
+        [email.toLowerCase().trim()]
+      )
+
+      if (userRes.rows.length === 0) {
+        return res.status(401).json({ error: 'Invalid credentials' })
+      }
+
+      const usuario = userRes.rows[0]
+
+      if (!usuario.ativo) {
+        return res.status(403).json({ error: 'User account is inactive' })
+      }
+
+      if (!verifyPassword(password, usuario.senha_hash)) {
+        return res.status(401).json({ error: 'Invalid credentials' })
+      }
+
       const token = jwt.sign(
-        { username, empresa_id: parseInt(empresa_id, 10) },
+        {
+          usuario_id: usuario.id,
+          empresa_id: usuario.empresa_id,
+          email,
+          nome: usuario.nome,
+        },
         jwtSecret,
         { expiresIn: '24h' }
       )
-      return res.json({ token })
-    }
 
-    res.status(401).json({ error: 'Invalid credentials' })
+      res.json({ token, usuario: { id: usuario.id, nome: usuario.nome, email } })
+    } finally {
+      client.release()
+    }
   } catch (err) {
     console.error('POST /auth/login error:', err.message)
     res.status(500).json({ error: err.message })
