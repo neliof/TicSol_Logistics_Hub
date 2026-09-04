@@ -87,6 +87,27 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 
+app.get('/health/sync/:empresaId', async (req, res) => {
+  try {
+    const empresaId = parseInt(req.params.empresaId, 10)
+    if (isNaN(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id' })
+    }
+
+    const client = await pool.connect()
+    try {
+      const { checkSyncHealth } = await import('./utils/alerting.js')
+      const health = await checkSyncHealth(client, empresaId)
+      res.json(health)
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('GET /health/sync error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 const ALLOWED_TABLES = new Set([
   'documento',
   'linha_documento',

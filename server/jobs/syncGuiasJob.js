@@ -7,6 +7,7 @@
 
 import cron from 'node-cron'
 import { sincronizarGuias } from '../artsoft-sync/guias/sync.js'
+import { alertarSyncFailure } from '../utils/alerting.js'
 
 export class SyncGuiasJob {
   constructor(pool, options = {}) {
@@ -130,6 +131,16 @@ export class SyncGuiasJob {
           `${resultado.erros.length} erros`
       )
 
+      // Alertar se não completo
+      if (resultado.ultima_execucao.estado !== 'completo') {
+        await alertarSyncFailure({
+          empresaId: id,
+          empresa_nome: nome,
+          estado: resultado.ultima_execucao.estado,
+          erro_mensagem: `Sync incomplete: ${resultado.erros.length} erros`,
+        }).catch(() => {})
+      }
+
       return {
         empresa_id: id,
         docs_criados: resultado.docs_criados,
@@ -139,6 +150,15 @@ export class SyncGuiasJob {
       }
     } catch (err) {
       console.error(`[SYNC-JOB:${id}] ${nome}: ✗ ${err.message}`)
+
+      // Alertar de erro crítico
+      await alertarSyncFailure({
+        empresaId: id,
+        empresa_nome: nome,
+        estado: 'erro_critico',
+        erro_mensagem: err.message,
+      }).catch(() => {})
+
       return {
         empresa_id: id,
         erro: err.message,
