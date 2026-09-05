@@ -141,8 +141,8 @@ app.get('/health', (req, res) => {
 
 app.get('/health/sync/:empresaId', async (req, res) => {
   try {
-    const empresaId = parseInt(req.params.empresaId, 10)
-    if (isNaN(empresaId)) {
+    const empresaId = String(req.params.empresaId)
+    if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id' })
     }
 
@@ -390,17 +390,24 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
       return res.status(403).json({ error: 'No empresa_id in token' })
     }
 
-    const empresaId = parseInt(req.user.empresa_id, 10)
-    if (isNaN(empresaId)) {
+    const empresaId = String(req.user.empresa_id)
+    if (!UUID_RE.test(empresaId)) {
       return res.status(403).json({ error: 'Invalid empresa_id' })
     }
 
     // Dynamic import to avoid circular dependency
     const { sincronizarGuias } = await import('../artsoft-sync/guias/sync.js')
 
-    // Get a dedicated connection for the sync (respects RLS via setEmpresaContext)
+    // Ligação dedicada à sincronização. Esta rota não passa por
+    // setEmpresaContext, logo o contexto de RLS é definido aqui — sem ele as
+    // políticas bloqueiam a escrita dos documentos.
     const client = await pool.connect()
     try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
       const logger = (msg) => console.log(`[SYNC:${empresaId}] ${msg}`)
 
       logger('Iniciado…')
@@ -416,6 +423,15 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
         ultima_execucao: resultado.ultima_execucao,
       })
     } finally {
+      // A ligação volta ao pool partilhada: limpar o contexto.
+      try {
+        await client.query('SELECT set_config($1, $2, false)', [
+          'request.jwt.claims',
+          '',
+        ])
+      } catch {
+        // Ligação já inutilizável: o pool descarta-a.
+      }
       client.release()
     }
   } catch (err) {
