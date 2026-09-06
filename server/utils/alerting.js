@@ -136,16 +136,16 @@ Please investigate and check logistics.sincronizacao_execucao for details.
  * Verificar health da sincronização (para monitoring).
  *
  * @param {object} client  PostgreSQL client
- * @param {number} empresaId
+ * @param {string} empresaId  UUID
  * @returns {Promise<{healthy: boolean, lastSync: Date, estado: string}>}
  */
 export async function checkSyncHealth(client, empresaId) {
   const res = await client.query(
     `
-    SELECT criado_em, estado
+    SELECT executado_em, estado
     FROM logistics.sincronizacao_execucao
     WHERE empresa_id = $1
-    ORDER BY criado_em DESC
+    ORDER BY executado_em DESC
     LIMIT 1
     `,
     [empresaId]
@@ -156,19 +156,19 @@ export async function checkSyncHealth(client, empresaId) {
       healthy: false,
       lastSync: null,
       estado: 'nunca_sincronizado',
-      diadesdeUltimaSincronizacao: null,
+      diasDesdeUltimaSincronizacao: null,
     }
   }
 
   const row = res.rows[0]
   const agora = new Date()
   const diasDesdeSync = Math.floor(
-    (agora - row.criado_em) / (1000 * 60 * 60 * 24)
+    (agora - row.executado_em) / (1000 * 60 * 60 * 24)
   )
 
   return {
-    healthy: row.estado === 'completo' && diasDesdeSync < 1,
-    lastSync: row.criado_em,
+    healthy: row.estado === 'ok' && diasDesdeSync < 1,
+    lastSync: row.executado_em,
     estado: row.estado,
     diasDesdeUltimaSincronizacao: diasDesdeSync,
   }

@@ -132,7 +132,7 @@ export class SyncGuiasJob {
       )
 
       // Alertar se não completo
-      if (resultado.ultima_execucao.estado !== 'completo') {
+      if (resultado.ultima_execucao.estado !== 'ok') {
         await alertarSyncFailure({
           empresaId: id,
           empresa_nome: nome,
