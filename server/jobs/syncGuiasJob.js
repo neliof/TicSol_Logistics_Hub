@@ -7,6 +7,7 @@
 
 import cron from 'node-cron'
 import { sincronizarGuias } from '../../artsoft-sync/guias/sync.js'
+import { sincronizarProdutos } from '../../artsoft-sync/produtos/sync.js'
 import { alertarSyncFailure } from '../utils/alerting.js'
 
 export class SyncGuiasJob {
@@ -119,6 +120,21 @@ export class SyncGuiasJob {
     const { id, nome } = empresa
     try {
       console.log(`[SYNC-JOB:${id}] ${nome}: iniciando…`)
+
+      // Fichas de artigo primeiro: as guias resolvem artigo_codigo -> produto_id
+      // contra logistics.produto, logo convém tê-la atualizada antes.
+      try {
+        const rp = await sincronizarProdutos(client, id, {
+          logger: (msg) => console.log(`[SYNC-JOB:${id}:produtos] ${msg}`),
+        })
+        console.log(
+          `[SYNC-JOB:${id}] ${nome}: ✓ produtos ` +
+            `${rp.criados} novos, ${rp.atualizados} atualizados, ${rp.erros.length} erros`
+        )
+      } catch (errProd) {
+        // Uma falha nas fichas não deve impedir a sincronização das guias.
+        console.error(`[SYNC-JOB:${id}] ${nome}: ✗ produtos: ${errProd.message}`)
+      }
 
       const resultado = await sincronizarGuias(client, id, {
         logger: (msg) => console.log(`[SYNC-JOB:${id}] ${msg}`),

@@ -443,6 +443,62 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
   }
 })
 
+app.post('/api/artsoft/produtos/sync', verifyJWT, syncLimiter, async (req, res) => {
+  try {
+    if (!req.user || !req.user.empresa_id) {
+      return res.status(403).json({ error: 'No empresa_id in token' })
+    }
+
+    const empresaId = String(req.user.empresa_id)
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(403).json({ error: 'Invalid empresa_id' })
+    }
+
+    const { sincronizarProdutos } = await import('../artsoft-sync/produtos/sync.js')
+
+    // Como na rota de guias, o contexto de RLS é definido aqui — sem ele as
+    // políticas bloqueiam a escrita em logistics.produto.
+    const client = await pool.connect()
+    try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
+      const logger = (msg) => console.log(`[SYNC-PRODUTOS:${empresaId}] ${msg}`)
+
+      logger('Iniciado…')
+      const resultado = await sincronizarProdutos(client, empresaId, { logger })
+
+      logger('Concluído com sucesso.')
+      res.json({
+        success: true,
+        criados: resultado.criados,
+        atualizados: resultado.atualizados,
+        processados: resultado.processados,
+        erros: resultado.erros,
+        ultima_execucao: resultado.ultima_execucao,
+      })
+    } finally {
+      try {
+        await client.query('SELECT set_config($1, $2, false)', [
+          'request.jwt.claims',
+          '',
+        ])
+      } catch {
+        // Ligação já inutilizável: o pool descarta-a.
+      }
+      client.release()
+    }
+  } catch (err) {
+    console.error('POST /api/artsoft/produtos/sync error:', err.message)
+    res.status(500).json({
+      error: err.message,
+      code: err.name || 'SYNC_ERROR',
+    })
+  }
+})
+
 const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
 
