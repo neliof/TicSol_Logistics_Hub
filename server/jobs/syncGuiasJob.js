@@ -8,6 +8,7 @@
 import cron from 'node-cron'
 import { sincronizarGuias } from '../../artsoft-sync/guias/sync.js'
 import { sincronizarProdutos } from '../../artsoft-sync/produtos/sync.js'
+import { sincronizarTerceiros } from '../../artsoft-sync/terceiros/sync.js'
 import { alertarSyncFailure } from '../utils/alerting.js'
 
 export class SyncGuiasJob {
@@ -134,6 +135,21 @@ export class SyncGuiasJob {
       } catch (errProd) {
         // Uma falha nas fichas não deve impedir a sincronização das guias.
         console.error(`[SYNC-JOB:${id}] ${nome}: ✗ produtos: ${errProd.message}`)
+      }
+
+      // Terceiros (clientes + fornecedores). Também não bloqueia as guias.
+      for (const tipo of ['cliente', 'fornecedor']) {
+        try {
+          const rt = await sincronizarTerceiros(client, id, tipo, {
+            logger: (msg) => console.log(`[SYNC-JOB:${id}:${tipo}] ${msg}`),
+          })
+          console.log(
+            `[SYNC-JOB:${id}] ${nome}: ✓ ${tipo} ` +
+              `${rt.criados} novos, ${rt.atualizados} atualizados, ${rt.erros.length} erros`
+          )
+        } catch (errTerc) {
+          console.error(`[SYNC-JOB:${id}] ${nome}: ✗ ${tipo}: ${errTerc.message}`)
+        }
       }
 
       const resultado = await sincronizarGuias(client, id, {
