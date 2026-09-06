@@ -9,6 +9,7 @@ import cron from 'node-cron'
 import { sincronizarGuias } from '../../artsoft-sync/guias/sync.js'
 import { sincronizarProdutos } from '../../artsoft-sync/produtos/sync.js'
 import { sincronizarTerceiros } from '../../artsoft-sync/terceiros/sync.js'
+import { sincronizarStock } from '../../artsoft-sync/stock/sync.js'
 import { alertarSyncFailure } from '../utils/alerting.js'
 
 export class SyncGuiasJob {
@@ -150,6 +151,19 @@ export class SyncGuiasJob {
         } catch (errTerc) {
           console.error(`[SYNC-JOB:${id}] ${nome}: ✗ ${tipo}: ${errTerc.message}`)
         }
+      }
+
+      // Snapshot de stock para reconciliação. Também não bloqueia as guias.
+      try {
+        const rs = await sincronizarStock(client, id, {
+          logger: (msg) => console.log(`[SYNC-JOB:${id}:stock] ${msg}`),
+        })
+        console.log(
+          `[SYNC-JOB:${id}] ${nome}: ✓ stock ` +
+            `${rs.gravados} produtos, ${rs.nao_resolvidos} não resolvidos`
+        )
+      } catch (errStock) {
+        console.error(`[SYNC-JOB:${id}] ${nome}: ✗ stock: ${errStock.message}`)
       }
 
       const resultado = await sincronizarGuias(client, id, {

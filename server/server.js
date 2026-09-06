@@ -547,6 +547,53 @@ app.post('/api/artsoft/terceiros/sync', verifyJWT, syncLimiter, async (req, res)
   }
 })
 
+app.post('/api/artsoft/stock/sync', verifyJWT, syncLimiter, async (req, res) => {
+  try {
+    if (!req.user || !req.user.empresa_id) {
+      return res.status(403).json({ error: 'No empresa_id in token' })
+    }
+
+    const empresaId = String(req.user.empresa_id)
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(403).json({ error: 'Invalid empresa_id' })
+    }
+
+    const { sincronizarStock } = await import('../artsoft-sync/stock/sync.js')
+
+    const client = await pool.connect()
+    try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
+      const logger = (msg) => console.log(`[SYNC-STOCK:${empresaId}] ${msg}`)
+
+      logger('Iniciado…')
+      const resultado = await sincronizarStock(client, empresaId, { logger })
+
+      logger('Concluído com sucesso.')
+      res.json({ success: true, ...resultado })
+    } finally {
+      try {
+        await client.query('SELECT set_config($1, $2, false)', [
+          'request.jwt.claims',
+          '',
+        ])
+      } catch {
+        // Ligação já inutilizável: o pool descarta-a.
+      }
+      client.release()
+    }
+  } catch (err) {
+    console.error('POST /api/artsoft/stock/sync error:', err.message)
+    res.status(500).json({
+      error: err.message,
+      code: err.name || 'SYNC_ERROR',
+    })
+  }
+})
+
 const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
 
