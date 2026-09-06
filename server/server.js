@@ -170,6 +170,7 @@ const ALLOWED_TABLES = new Set([
   'terceiro',
   'cliente',
   'fornecedor',
+  'palete',
   'artsoft_stock_snapshot',
   'vw_reconciliacao_stock',
 ])
