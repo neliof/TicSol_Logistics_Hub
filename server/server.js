@@ -168,6 +168,10 @@ const ALLOWED_TABLES = new Set([
   'sincronizacao_execucao',
   'produto',
   'terceiro',
+  'cliente',
+  'fornecedor',
+  'artsoft_stock_snapshot',
+  'vw_reconciliacao_stock',
 ])
 
 const validateTableName = (table) => {
