@@ -380,13 +380,10 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
  */
 app.post('/api/artsoft/guias/sync', noAuth, syncLimiter, async (req, res) => {
   try {
-    if (!req.user || !req.user.empresa_id) {
-      return res.status(403).json({ error: 'No empresa_id in token' })
-    }
-
-    const empresaId = String(req.user.empresa_id)
+    // Dev phase: empresa_id from query, token, or default
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
-      return res.status(403).json({ error: 'Invalid empresa_id' })
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
 
     // Dynamic import to avoid circular dependency
@@ -462,13 +459,9 @@ app.post('/api/artsoft/guias/sync', noAuth, syncLimiter, async (req, res) => {
 
 app.post('/api/artsoft/produtos/sync', noAuth, syncLimiter, async (req, res) => {
   try {
-    if (!req.user || !req.user.empresa_id) {
-      return res.status(403).json({ error: 'No empresa_id in token' })
-    }
-
-    const empresaId = String(req.user.empresa_id)
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
-      return res.status(403).json({ error: 'Invalid empresa_id' })
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
 
     const { sincronizarProdutos } = await import('../artsoft-sync/produtos/sync.js')
@@ -518,13 +511,9 @@ app.post('/api/artsoft/produtos/sync', noAuth, syncLimiter, async (req, res) => 
 
 app.post('/api/artsoft/terceiros/sync', noAuth, syncLimiter, async (req, res) => {
   try {
-    if (!req.user || !req.user.empresa_id) {
-      return res.status(403).json({ error: 'No empresa_id in token' })
-    }
-
-    const empresaId = String(req.user.empresa_id)
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
-      return res.status(403).json({ error: 'Invalid empresa_id' })
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
 
     const { sincronizarTerceiros } = await import('../artsoft-sync/terceiros/sync.js')
@@ -566,13 +555,9 @@ app.post('/api/artsoft/terceiros/sync', noAuth, syncLimiter, async (req, res) =>
 
 app.post('/api/artsoft/stock/sync', noAuth, syncLimiter, async (req, res) => {
   try {
-    if (!req.user || !req.user.empresa_id) {
-      return res.status(403).json({ error: 'No empresa_id in token' })
-    }
-
-    const empresaId = String(req.user.empresa_id)
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
-      return res.status(403).json({ error: 'Invalid empresa_id' })
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
 
     const { sincronizarStock } = await import('../artsoft-sync/stock/sync.js')
