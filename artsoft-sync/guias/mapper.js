@@ -121,6 +121,9 @@ async function upsertDocumento(client, empresaId, doc) {
     terceiro_filial,
     terceiro_nome,
     terceiro_nif,
+    terceiro_morada,
+    terceiro_localidade,
+    terceiro_cpostal,
     observacoes,
     pedido_origem,
     dados_extra,
@@ -143,6 +146,9 @@ async function upsertDocumento(client, empresaId, doc) {
     terceiro_filial: terceiro_filial || null,
     terceiro_nome: terceiro_nome || null,
     terceiro_nif: terceiro_nif || null,
+    terceiro_morada: terceiro_morada || null,
+    terceiro_localidade: terceiro_localidade || null,
+    terceiro_cpostal: terceiro_cpostal || null,
     observacoes: observacoes || null,
     pedido_origem: pedido_origem || null,
     ...(dados_extra || {}),
@@ -187,7 +193,7 @@ async function upsertDocumento(client, empresaId, doc) {
  * @param {Array} linhas            linhas parseadas
  * @returns {Promise<number>}       número de linhas inseridas
  */
-async function atualizarLinhas(client, documento_id, linhas) {
+async function atualizarLinhas(client, empresaId, documento_id, linhas) {
   if (!linhas || !Array.isArray(linhas) || linhas.length === 0) {
     // Sem linhas — apagar as antigas
     await client.query(
@@ -195,6 +201,28 @@ async function atualizarLinhas(client, documento_id, linhas) {
       [documento_id]
     );
     return 0;
+  }
+
+  // EAN13 via correlação StkFch no pedido ARTSOFT vem sempre vazio (a
+  // correlação não resolve nesta instalação); como produtos.sync já
+  // populou logistics.produto com o EAN correto, resolve-se por aqui em
+  // vez de depender do ARTSOFT devolver o campo.
+  const codigosUnicos = [
+    ...new Set(
+      linhas
+        .map((l) => String(l.artigo_codigo || "").trim())
+        .filter((c) => c !== "")
+    ),
+  ];
+  const eanPorCodigo = new Map();
+  if (codigosUnicos.length > 0) {
+    const res = await client.query(
+      `SELECT sku_interno, ean13 FROM logistics.produto WHERE empresa_id = $1 AND sku_interno = ANY($2)`,
+      [empresaId, codigosUnicos]
+    );
+    for (const row of res.rows) {
+      if (row.ean13) eanPorCodigo.set(row.sku_interno, row.ean13);
+    }
   }
 
   // Transação: delete + bulk insert
@@ -238,7 +266,8 @@ async function atualizarLinhas(client, documento_id, linhas) {
       const extra = { ...(dados_extra || {}) };
       if (artigo_nrreg) extra.artigo_nrreg = artigo_nrreg;
       if (peso) extra.peso = peso;
-      if (ean13) extra.ean13 = ean13;
+      const eanResolvido = ean13 || dados_extra?.ean13 || eanPorCodigo.get(codigo);
+      if (eanResolvido) extra.ean13 = eanResolvido;
 
       const quantidadeNum = Number.parseFloat(String(quantidade ?? ""));
 
@@ -283,7 +312,7 @@ export async function processarDocumento(client, empresaId, doc, correlationId =
     const { documento_id, criado } = await upsertDocumento(client, empresaId, doc);
 
     // Atualizar linhas
-    const linhas_inseridas = await atualizarLinhas(client, documento_id, doc.linhas || []);
+    const linhas_inseridas = await atualizarLinhas(client, empresaId, documento_id, doc.linhas || []);
 
     return { documento_id, linhas_inseridas, criado };
   } catch (erro) {

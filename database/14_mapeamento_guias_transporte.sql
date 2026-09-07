@@ -24,9 +24,23 @@ CROSS JOIN (
         -- se descobrir o path correto; documento.data_emissao cai então no
         -- fallback de NOW() em mapper.js.
         ('guia_cabecalho', 'data',   'DataDocum', '%DocFch.Doc.DataDocum', false),
+        -- Dados do terceiro (cliente) do cabeçalho. terceiro_nif fica
+        -- inativo: %DocFch.Ter.NIF deu ErrVarNotFound, path correto por
+        -- descobrir; os restantes Ter.* confirmados contra ARTSOFT real.
+        ('guia_cabecalho', 'terceiro_numero',     'TerTerceiro', '%DocFch.Ter.Terceiro',  true),
+        ('guia_cabecalho', 'terceiro_nome',       'TerNome',     '%DocFch.Ter.Nome',      true),
+        ('guia_cabecalho', 'terceiro_morada',     'TerMorada',   '%DocFch.Ter.Morada',    true),
+        ('guia_cabecalho', 'terceiro_localidade', 'TerLocalid',  '%DocFch.Ter.Localid',   true),
+        ('guia_cabecalho', 'terceiro_cpostal',    'TerCPost',    '%DocFch.Ter.CPostAlfa', true),
+        ('guia_cabecalho', 'terceiro_nif',        'TerNIF',      '%DocFch.Ter.NIF',       false),
         ('guia_linha', 'artigo_codigo', 'Codigo', '%DocLan.Cod.Codigo',  true),
         ('guia_linha', 'descricao',     'Nome',   '%DocLan.Div.Descric', true),
-        ('guia_linha', 'quantidade',    'Qtd',    '%DocLan.Qtd.Real',    true)
+        ('guia_linha', 'quantidade',    'Qtd',    '%DocLan.Qtd.Real',    true),
+        -- EAN via correlação StkFch vem sempre vazio nesta instalação;
+        -- mapper.js resolve o EAN por logistics.produto.sku_interno em vez
+        -- disso. Fica mapeado (inativo não faz sentido: sem custo mantê-lo
+        -- ativo, e se um dia a correlação passar a funcionar já está pronto).
+        ('guia_linha', 'ean', 'EAN13', '%StkFch.Cod.Opcional', true)
 ) AS m(contexto, campo, tag_xml, form_path, ativo)
 WHERE e.ativa = true
 ON CONFLICT (empresa_id, contexto, campo) DO UPDATE SET

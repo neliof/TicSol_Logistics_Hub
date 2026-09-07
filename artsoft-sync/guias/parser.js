@@ -90,6 +90,9 @@ function parseDocumento(no) {
     terceiro_filial: textoDe(no, "TerFilial", "Filial", "Ter.Filial"),
     terceiro_nome: textoDe(no, "TerNome", "Nome", "Ter.Nome"),
     terceiro_nif: textoDe(no, "TerNIF", "nif", "Ter.NIF"),
+    terceiro_morada: textoDe(no, "TerMorada", "Morada", "Ter.Morada"),
+    terceiro_localidade: textoDe(no, "TerLocalid", "Localidade", "Ter.Localid"),
+    terceiro_cpostal: textoDe(no, "TerCPost", "CodPostal", "Ter.CPostAlfa"),
     observacoes: textoDe(no, "DocObs", "Doc.Obs"),
     pedido_origem: textoDe(no, "DocPedido", "Doc.Pedido"),
     // CDU, campos logísticos e outros extras não têm coluna própria.
