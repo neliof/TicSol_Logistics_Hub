@@ -66,14 +66,32 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
-// AUTH DISABLED FOR DEV PHASE
-// const verifyJWT = (req, res, next) => { ... }
-// const optionalJWT = (req, res, next) => { ... }
+// Dev phase: se sem token, gera automaticamente
+const verifyJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization
+  if (!authHeader) {
+    // Dev: gera token automático
+    const token = jwt.sign(
+      { usuario_id: 'dev-user', empresa_id: '11111111-1111-1111-1111-111111111111', email: 'dev@localhost', nome: 'Dev' },
+      jwtSecret,
+      { expiresIn: '24h' }
+    )
+    req.user = jwt.decode(token)
+    return next()
+  }
 
-// Sem autenticação: permite tudo (restaurar em produção)
-const noAuth = (req, res, next) => {
-  req.user = null
-  next()
+  const token = authHeader.split(' ')[1]
+  if (!token) {
+    return res.status(401).json({ error: 'Missing bearer token' })
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret)
+    req.user = decoded
+    next()
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' })
+  }
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -180,7 +198,7 @@ const validateTableName = (table) => {
  */
 app.get(
   '/rest/v1/documento/:id/linhas',
-  noAuth,
+  verifyJWT,
   setEmpresaContext,
   async (req, res) => {
     try {
@@ -210,7 +228,7 @@ app.get(
   }
 )
 
-app.get('/rest/v1/:table', noAuth, setEmpresaContext, async (req, res) => {
+app.get('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
   console.log(`[GET /rest/v1/:table] table=${req.params.table}, user=${req.user ? 'yes' : 'no'}`)
   try {
     const table = validateTableName(req.params.table)
@@ -232,7 +250,7 @@ app.get('/rest/v1/:table', noAuth, setEmpresaContext, async (req, res) => {
   }
 })
 
-app.post('/rest/v1/:table', noAuth, setEmpresaContext, async (req, res) => {
+app.post('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
   try {
     const table = validateTableName(req.params.table)
     const data = req.body
@@ -268,7 +286,7 @@ app.post('/rest/v1/:table', noAuth, setEmpresaContext, async (req, res) => {
 
 const ALLOWED_FUNCTIONS = new Set(['sincronizar_guias', 'validar_documento'])
 
-app.post('/rpc/:func', noAuth, setEmpresaContext, async (req, res) => {
+app.post('/rpc/:func', verifyJWT, setEmpresaContext, async (req, res) => {
   try {
     const func = req.params.func
     if (!func || !/^[a-z_][a-z0-9_]*$/i.test(func)) {
@@ -366,6 +384,25 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
 })
 
 /**
+ * Dev phase: retorna token automático sem credenciais.
+ * Remover em produção — restaurar autenticação obrigatória.
+ */
+app.get('/auth/dev-token', (req, res) => {
+  const empresaId = '11111111-1111-1111-1111-111111111111'
+  const token = jwt.sign(
+    {
+      usuario_id: 'dev-user',
+      empresa_id: empresaId,
+      email: 'dev@localhost',
+      nome: 'Dev User',
+    },
+    jwtSecret,
+    { expiresIn: '24h' }
+  )
+  res.json({ token, usuario: { id: 'dev-user', nome: 'Dev User', email: 'dev@localhost' } })
+})
+
+/**
  * @swagger
  * /api/artsoft/guias/sync:
  *   post:
@@ -378,7 +415,7 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
  *       429:
  *         description: Rate limit exceeded
  */
-app.post('/api/artsoft/guias/sync', noAuth, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
     // Dev phase: empresa_id from query, token, or default
     const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
@@ -457,7 +494,7 @@ app.post('/api/artsoft/guias/sync', noAuth, syncLimiter, async (req, res) => {
   }
 })
 
-app.post('/api/artsoft/produtos/sync', noAuth, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/produtos/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
     const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
@@ -509,7 +546,7 @@ app.post('/api/artsoft/produtos/sync', noAuth, syncLimiter, async (req, res) => 
   }
 })
 
-app.post('/api/artsoft/terceiros/sync', noAuth, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/terceiros/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
     const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
@@ -553,7 +590,7 @@ app.post('/api/artsoft/terceiros/sync', noAuth, syncLimiter, async (req, res) =>
   }
 })
 
-app.post('/api/artsoft/stock/sync', noAuth, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/stock/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
     const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
