@@ -66,46 +66,13 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
-const verifyJWT = (req, res, next) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Missing authorization header' })
-  }
+// AUTH DISABLED FOR DEV PHASE
+// const verifyJWT = (req, res, next) => { ... }
+// const optionalJWT = (req, res, next) => { ... }
 
-  const token = authHeader.split(' ')[1]
-  if (!token) {
-    return res.status(401).json({ error: 'Missing bearer token' })
-  }
-
-  try {
-    const decoded = jwt.verify(token, jwtSecret)
-    req.user = decoded
-    next()
-  } catch (err) {
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
-
-// Autenticação opcional: tenta verificar token mas permite acesso sem ele
-const optionalJWT = (req, res, next) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader) {
-    req.user = null
-    return next()
-  }
-
-  const token = authHeader.split(' ')[1]
-  if (!token) {
-    req.user = null
-    return next()
-  }
-
-  try {
-    const decoded = jwt.verify(token, jwtSecret)
-    req.user = decoded
-  } catch (err) {
-    req.user = null
-  }
+// Sem autenticação: permite tudo (restaurar em produção)
+const noAuth = (req, res, next) => {
+  req.user = null
   next()
 }
 
@@ -213,7 +180,7 @@ const validateTableName = (table) => {
  */
 app.get(
   '/rest/v1/documento/:id/linhas',
-  optionalJWT,
+  noAuth,
   setEmpresaContext,
   async (req, res) => {
     try {
@@ -243,7 +210,8 @@ app.get(
   }
 )
 
-app.get('/rest/v1/:table', optionalJWT, setEmpresaContext, async (req, res) => {
+app.get('/rest/v1/:table', noAuth, setEmpresaContext, async (req, res) => {
+  console.log(`[GET /rest/v1/:table] table=${req.params.table}, user=${req.user ? 'yes' : 'no'}`)
   try {
     const table = validateTableName(req.params.table)
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000)
@@ -264,7 +232,7 @@ app.get('/rest/v1/:table', optionalJWT, setEmpresaContext, async (req, res) => {
   }
 })
 
-app.post('/rest/v1/:table', optionalJWT, setEmpresaContext, async (req, res) => {
+app.post('/rest/v1/:table', noAuth, setEmpresaContext, async (req, res) => {
   try {
     const table = validateTableName(req.params.table)
     const data = req.body
@@ -300,7 +268,7 @@ app.post('/rest/v1/:table', optionalJWT, setEmpresaContext, async (req, res) => 
 
 const ALLOWED_FUNCTIONS = new Set(['sincronizar_guias', 'validar_documento'])
 
-app.post('/rpc/:func', optionalJWT, setEmpresaContext, async (req, res) => {
+app.post('/rpc/:func', noAuth, setEmpresaContext, async (req, res) => {
   try {
     const func = req.params.func
     if (!func || !/^[a-z_][a-z0-9_]*$/i.test(func)) {
@@ -410,7 +378,7 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
  *       429:
  *         description: Rate limit exceeded
  */
-app.post('/api/artsoft/guias/sync', optionalJWT, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/guias/sync', noAuth, syncLimiter, async (req, res) => {
   try {
     if (!req.user || !req.user.empresa_id) {
       return res.status(403).json({ error: 'No empresa_id in token' })
@@ -492,7 +460,7 @@ app.post('/api/artsoft/guias/sync', optionalJWT, syncLimiter, async (req, res) =
   }
 })
 
-app.post('/api/artsoft/produtos/sync', optionalJWT, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/produtos/sync', noAuth, syncLimiter, async (req, res) => {
   try {
     if (!req.user || !req.user.empresa_id) {
       return res.status(403).json({ error: 'No empresa_id in token' })
@@ -548,7 +516,7 @@ app.post('/api/artsoft/produtos/sync', optionalJWT, syncLimiter, async (req, res
   }
 })
 
-app.post('/api/artsoft/terceiros/sync', optionalJWT, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/terceiros/sync', noAuth, syncLimiter, async (req, res) => {
   try {
     if (!req.user || !req.user.empresa_id) {
       return res.status(403).json({ error: 'No empresa_id in token' })
@@ -596,7 +564,7 @@ app.post('/api/artsoft/terceiros/sync', optionalJWT, syncLimiter, async (req, re
   }
 })
 
-app.post('/api/artsoft/stock/sync', optionalJWT, syncLimiter, async (req, res) => {
+app.post('/api/artsoft/stock/sync', noAuth, syncLimiter, async (req, res) => {
   try {
     if (!req.user || !req.user.empresa_id) {
       return res.status(403).json({ error: 'No empresa_id in token' })
