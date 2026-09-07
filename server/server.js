@@ -415,9 +415,32 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
       ])
 
       const logger = (msg) => console.log(`[SYNC:${empresaId}] ${msg}`)
+      const dataInicio = req.body?.data_inicio ? new Date(req.body.data_inicio) : null
+      const dataFim = req.body?.data_fim ? new Date(req.body.data_fim) : null
 
       logger('Iniciado…')
       const resultado = await sincronizarGuias(client, empresaId, { logger })
+
+      // Após sincronizar, marcar documentos como EXPEDIDA (se em intervalo de datas, se pedido)
+      if (dataInicio || dataFim) {
+        let where = 'tipo = $1'
+        const params = ['guia_transporte']
+        let paramIdx = 2
+        if (dataInicio) {
+          where += ` AND data_emissao >= $${paramIdx}`
+          params.push(dataInicio)
+          paramIdx++
+        }
+        if (dataFim) {
+          where += ` AND data_emissao <= $${paramIdx}`
+          params.push(dataFim)
+          paramIdx++
+        }
+        await client.query(
+          `UPDATE logistics.documento SET estado = 'EXPEDIDA' WHERE empresa_id = $1 AND ${where}`,
+          [empresaId, ...params.slice(1)]
+        )
+      }
 
       logger('Concluído com sucesso.')
       res.json({
