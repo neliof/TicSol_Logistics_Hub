@@ -135,13 +135,22 @@ function parseLinha(lan, nrLinha) {
     artigo_nrreg: textoDe(lan, "DivNrReg", "StkFch.Div.NrReg"),
     // Por confirmar
     peso: textoDe(lan, "Peso", "StkFch.Logis.Peso"),
-    ean13: textoDe(lan, "EAN13", "StkFch.Cod.EAN"),
   };
 
   // Campos do utilizador (CDU) e estruturas aninhadas em dados_extra
   linha.dados_extra = {
     ...extractCDU(lan),
     custo_unitario: extractCusto(lan),
+    // EAN/Código Opcional
+    ean13: textoDe(lan, "EAN13", "Cod.Opcional", "StkFch.Cod.EAN"),
+    // Campos de valor (se disponíveis)
+    valor_unitario: texto(textoDe(lan, "ValUn", "Val.UnBru", "DocLan.Val.UnBru")),
+    iva: texto(textoDe(lan, "IVATaxa", "IVA.Taxa", "DocLan.IVA.Taxa")),
+    desconto: texto(textoDe(lan, "Desc", "Desc.Lin0", "DocLan.Desc.Lin0")),
+    total_liquido: texto(textoDe(lan, "TotalLiq", "Val.TtLiqEx", "DocLan.Val.TtLiqEx")),
+    // Agregação (se disponível)
+    lote: textoDe(lan, "Lote", "StkFch.Lote", "DocLan.Lote"),
+    data_validade: textoDe(lan, "DataValidade", "StkFch.Data.Val", "DocLan.Data.Val"),
   };
 
   return linha;
