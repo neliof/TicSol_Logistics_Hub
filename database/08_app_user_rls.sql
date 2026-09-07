@@ -29,51 +29,16 @@ ALTER TABLE logistics.sincronizacao_execucao ENABLE ROW LEVEL SECURITY;
 -- Set app_user as default for row policies (will be overridden by auth context)
 -- For now, policies are permissive and check app context (future: JWT claims)
 
--- Policy: documento — empresa_id must match current_setting('app.empresa_id')
-CREATE POLICY app_documento_isolation ON logistics.documento
-  FOR ALL
-  USING (empresa_id = (current_setting('app.empresa_id')::INT))
-  WITH CHECK (empresa_id = (current_setting('app.empresa_id')::INT));
+-- Policy: documento — handled by 07_guias_transporte.sql (isolamento_empresa uses jwt_empresa_id)
+-- Removido INT policy para evitar conflito: empresa_id é UUID, não INT
 
-CREATE POLICY app_linha_documento_isolation ON logistics.linha_documento
-  FOR ALL
-  USING (
-    documento_id IN (
-      SELECT id FROM logistics.documento
-      WHERE empresa_id = (current_setting('app.empresa_id')::INT)
-    )
-  )
-  WITH CHECK (
-    documento_id IN (
-      SELECT id FROM logistics.documento
-      WHERE empresa_id = (current_setting('app.empresa_id')::INT)
-    )
-  );
+-- Policy: linha_documento — handled by 07_guias_transporte.sql (isolamento_empresa uses jwt_empresa_id)
+-- Removido INT policy para evitar conflito
 
-CREATE POLICY app_configuracao_isolation ON logistics.configuracao
-  FOR ALL
-  USING (empresa_id = (current_setting('app.empresa_id')::INT))
-  WITH CHECK (empresa_id = (current_setting('app.empresa_id')::INT));
+-- Policies for configuracao, mapeamento_campo, sincronizacao_execucao
+-- handled by 07_guias_transporte.sql (isolamento_empresa uses jwt_empresa_id)
+-- Removidas INT policies para evitar conflito com UUID comparações
 
-CREATE POLICY app_mapeamento_campo_isolation ON logistics.mapeamento_campo
-  FOR ALL
-  USING (empresa_id = (current_setting('app.empresa_id')::INT))
-  WITH CHECK (empresa_id = (current_setting('app.empresa_id')::INT));
-
-CREATE POLICY app_sincronizacao_execucao_isolation ON logistics.sincronizacao_execucao
-  FOR ALL
-  USING (empresa_id = (current_setting('app.empresa_id')::INT))
-  WITH CHECK (empresa_id = (current_setting('app.empresa_id')::INT));
-
--- Function to set empresa context (called by app on each request)
-CREATE OR REPLACE FUNCTION logistics.set_empresa_context(p_empresa_id INT)
-RETURNS VOID AS $$
-BEGIN
-  PERFORM set_config('app.empresa_id', p_empresa_id::TEXT, FALSE);
-END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-
-GRANT EXECUTE ON FUNCTION logistics.set_empresa_context(INT) TO app_user;
-
--- Note: App must call `SELECT logistics.set_empresa_context(user_empresa_id)` after login.
--- Alternatively: use PostgREST JWT claims or connection pooler variable support.
+-- Obsoleto: app agora usa JWT (07_guias_transporte.sql) em vez de set_empresa_context
+-- JWT approach: middleware seta request.jwt.claims com empresa_id UUID
+-- DROP FUNCTION IF EXISTS logistics.set_empresa_context(INT);
