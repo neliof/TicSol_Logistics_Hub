@@ -47,7 +47,8 @@ SELECT
     us.quantidade_artsoft,
     us.data_sync AS ultima_sincronizacao,
     us.origem AS conector_usado,
-    coalesce(sw.quantidade_wms, 0) - coalesce(us.quantidade_artsoft, 0) AS diferenca
+    coalesce(sw.quantidade_wms, 0) - coalesce(us.quantidade_artsoft, 0) AS diferenca,
+    p.ean13
 FROM logistics.produto p
 LEFT JOIN stock_wms sw ON sw.produto_id = p.id
 LEFT JOIN ultimo_snapshot us ON us.produto_id = p.id;
