@@ -231,7 +231,7 @@ function construirPedidoGuias({
  *   ultima_execucao: {id: number, estado: string}
  * }>}
  */
-export async function sincronizarGuias(client, empresaId, { logger = () => {} } = {}) {
+export async function sincronizarGuias(client, empresaId, { logger = () => {}, dataInicio: dataInicioParam = null, dataFim: dataFimParam = null } = {}) {
   const correlationId = crypto.randomUUID();
   // Estados aceites pela constraint de logistics.sincronizacao_execucao:
   // ok | erro_comunicacao | erro_autenticacao | erro_xml | erro_funcional | incompleto
@@ -257,12 +257,19 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {} } 
       );
     }
 
-    // Janela de datas: hoje menos `guias.dias_retroativos` até hoje.
-    const hoje = new Date();
-    const inicio = new Date(hoje);
-    inicio.setDate(inicio.getDate() - cfg.diasRetroativos);
-    const dataInicio = formatarDataArtsoft(inicio);
-    const dataFim = formatarDataArtsoft(hoje);
+    // Janela de datas: usa as datas do pedido se fornecidas, senão
+    // hoje menos `guias.dias_retroativos` até hoje.
+    let dataInicio, dataFim;
+    if (dataInicioParam && dataFimParam) {
+      dataInicio = formatarDataArtsoft(dataInicioParam);
+      dataFim = formatarDataArtsoft(dataFimParam);
+    } else {
+      const hoje = new Date();
+      const inicio = new Date(hoje);
+      inicio.setDate(inicio.getDate() - cfg.diasRetroativos);
+      dataInicio = formatarDataArtsoft(inicio);
+      dataFim = formatarDataArtsoft(hoje);
+    }
 
     logger(
       `[${correlationId}] Construindo pedido… ` +

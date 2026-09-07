@@ -441,28 +441,10 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
       const dataFim = req.body?.data_fim ? new Date(req.body.data_fim) : null
 
       logger('Iniciado…')
-      const resultado = await sincronizarGuias(client, empresaId, { logger })
+      const resultado = await sincronizarGuias(client, empresaId, { logger, dataInicio, dataFim })
 
-      // Após sincronizar, marcar documentos como EXPEDIDA (se em intervalo de datas, se pedido)
-      if (dataInicio || dataFim) {
-        let where = 'tipo = $1'
-        const params = ['guia_transporte']
-        let paramIdx = 2
-        if (dataInicio) {
-          where += ` AND data_emissao >= $${paramIdx}`
-          params.push(dataInicio)
-          paramIdx++
-        }
-        if (dataFim) {
-          where += ` AND data_emissao <= $${paramIdx}`
-          params.push(dataFim)
-          paramIdx++
-        }
-        await client.query(
-          `UPDATE logistics.documento SET estado = 'EXPEDIDA' WHERE empresa_id = $1 AND ${where}`,
-          [empresaId, ...params.slice(1)]
-        )
-      }
+      // NOTA: logistics.documento não tem coluna de estado/status ainda.
+      // Marcar como EXPEDIDA requer migração para adicionar essa coluna.
 
       logger('Concluído com sucesso.')
       res.json({
@@ -629,6 +611,137 @@ app.post('/api/artsoft/stock/sync', verifyJWT, syncLimiter, async (req, res) => 
     res.status(500).json({
       error: err.message,
       code: err.name || 'SYNC_ERROR',
+    })
+  }
+})
+
+/**
+ * Descobre séries de documentos disponíveis no ARTSOFT.
+ * Query simples: DocFch sem filtros para listar tipos de documentos.
+ */
+app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const client = await pool.connect()
+    try {
+      // Ler configuração ARTSOFT
+      const configRes = await client.query(
+        'SELECT chave, valor FROM logistics.configuracao WHERE empresa_id = $1 AND chave LIKE $2',
+        [empresaId, 'artsoft.%']
+      )
+
+      const config = {}
+      for (const row of configRes.rows) {
+        config[row.chave] = row.valor
+      }
+
+      if (!config['artsoft.host'] || !config['artsoft.porta'] || !config['artsoft.utilizador']) {
+        return res.status(400).json({ error: 'Config incompleta: artsoft.host/porta/utilizador' })
+      }
+
+      // Query simples ao ARTSOFT para descobrir séries
+      const { executarPedidoArtsoft } = await import('../artsoft-sync/artsoft/connection.js')
+      const { parseXml, comoLista } = await import('../artsoft-sync/artsoft/xml.js')
+
+      // Query simples: apenas DocFch
+      const xml = `<root>
+        <rec>
+          <DocFch />
+        </rec>
+      </root>`
+
+      let resposta
+      try {
+        resposta = await executarPedidoArtsoft({
+          host: config['artsoft.host'],
+          porta: parseInt(config['artsoft.porta'], 10),
+          utilizador: config['artsoft.utilizador'],
+          senha: config['artsoft.senha'] || '',
+          xml: xml,
+          timeout: 30000,
+        })
+      } catch (connectErr) {
+        console.error('ARTSOFT connection error:', connectErr.message)
+        return res.json({
+          series: [],
+          total: 0,
+          message: `Erro ao conectar ARTSOFT: ${connectErr.message}. Introduza séries manualmente.`,
+        })
+      }
+
+      const parsed = parseXml(resposta)
+      const docs = comoLista(parsed.rec)
+
+      // Extrair séries únicas — procura em vários caminhos possíveis
+      const series = new Set()
+      for (const doc of docs) {
+        const serie = doc?.DocSerie || doc?.['Doc.Serie'] || doc?.Serie
+        if (serie && String(serie).trim()) {
+          series.add(String(serie).trim().toUpperCase())
+        }
+      }
+
+      res.json({
+        series: Array.from(series).sort(),
+        total: series.size,
+      })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('GET /api/artsoft/series/discover error:', err.message)
+    res.status(500).json({
+      error: err.message,
+      code: err.name || 'DISCOVER_ERROR',
+    })
+  }
+})
+
+/**
+ * Grava séries configuradas em logistics.configuracao.
+ */
+app.post('/api/artsoft/series/save', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const { series } = req.body
+    if (!Array.isArray(series) || series.length === 0) {
+      return res.status(400).json({ error: 'Series array required and cannot be empty' })
+    }
+
+    const seriesStr = series.map(s => String(s).trim().toUpperCase()).join(';')
+
+    const client = await pool.connect()
+    try {
+      const result = await client.query(
+        `INSERT INTO logistics.configuracao (empresa_id, chave, valor, descricao)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (empresa_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = now()
+         RETURNING chave, valor`,
+        [empresaId, 'guias.series', seriesStr, 'Séries de guias de transporte a sincronizar']
+      )
+
+      res.json({
+        success: true,
+        chave: result.rows[0].chave,
+        valor: result.rows[0].valor,
+        message: `Séries gravadas: ${seriesStr}`,
+      })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('POST /api/artsoft/series/save error:', err.message)
+    res.status(500).json({
+      error: err.message,
+      code: err.name || 'SAVE_ERROR',
     })
   }
 })

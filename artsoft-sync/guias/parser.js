@@ -127,7 +127,7 @@ function parseLinha(lan, nrLinha) {
   const linha = {
     nr_linha: nrLinha,
     nr_lancamento: texto(lan.DocNrLan || lan["DocLan.Doc.NrLan"]),
-    artigo_codigo: textoDe(lan, "Artigo", "Cod.Codigo", "DocLan.Cod.Codigo"),
+    artigo_codigo: textoDe(lan, "Artigo", "Codigo", "Cod.Codigo", "DocLan.Cod.Codigo"),
     descricao: textoDe(lan, "Nome", "StkFch.Nome.0", "DocLan.Desc"),
     quantidade: texto(lan.Qtd || lan["DocLan.Qtd.Movim"] || lan["Qtd.Movim"]),
     unidade: textoDe(lan, "Unid", "StkFch.Logis.Uni", "DocLan.Unid"),
