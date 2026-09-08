@@ -806,7 +806,10 @@ app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
       return res.status(400).json({ error: 'receção and expedição must be arrays of series codes' })
     }
 
-    const moduloNorm = String(modulo).toLowerCase().replace('ç', 'c')
+    // Chave tem de coincidir exatamente com a usada no GET (String(modulo).toLowerCase(),
+    // sem normalizar acentos) — normalizar apenas o 'ç' (e não o 'ã') criava uma 3ª
+    // variante de chave ("rececão") que nunca correspondia ao que o GET procurava.
+    const moduloNorm = String(modulo).toLowerCase()
     const configValue = JSON.stringify({ receção, expedição })
 
     const client = await pool.connect()
