@@ -755,6 +755,11 @@ app.get('/api/artsoft/series/config/:modulo', verifyJWT, async (req, res) => {
 
     const client = await pool.connect()
     try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
       const result = await client.query(
         `SELECT valor, updated_at FROM logistics.configuracao
          WHERE empresa_id = $1 AND chave = $2`,
@@ -814,6 +819,11 @@ app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
 
     const client = await pool.connect()
     try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
       await client.query(
         `INSERT INTO logistics.configuracao (empresa_id, chave, valor, descricao)
          VALUES ($1, $2, $3, $4)
@@ -850,6 +860,11 @@ app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
 
     const client = await pool.connect()
     try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
       // Delete only documentos — cascading FK deletes linhas
       const docsRes = await client.query(
         `DELETE FROM logistics.documento WHERE empresa_id = $1`,
