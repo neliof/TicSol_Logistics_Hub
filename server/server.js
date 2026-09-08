@@ -681,6 +681,7 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
       const xml = `<root type='list' end='500' name='rec' query='${filtro}'>
         <defcol>
           <Serie form='%DocFch.Doc.Serie' />
+          <DocNome form='%DocFch.Doc.Nome' />
         </defcol>
       </root>`
 
@@ -699,10 +700,11 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
         const regs = comoLista(parsed.rec)
         for (const r of regs) {
           const serie = texto(r?.Serie)
+          const docNome = texto(r?.DocNome)
           if (serie) {
             const serieUpper = serie.toUpperCase()
             const { type, typeName } = classifySeriesType(serieUpper)
-            seriesData.set(serieUpper, { type, typeName })
+            seriesData.set(serieUpper, { type, typeName, docNome: docNome || '' })
           }
         }
       } catch (connectErr) {
@@ -714,10 +716,11 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
         })
       }
 
-      const seriesArray = Array.from(seriesData.entries()).map(([code, { type, typeName }]) => ({
+      const seriesArray = Array.from(seriesData.entries()).map(([code, { type, typeName, docNome }]) => ({
         code,
         type,
-        typeName
+        typeName,
+        docNome
       })).sort((a, b) => a.code.localeCompare(b.code));
 
       res.json({
