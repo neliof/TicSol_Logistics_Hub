@@ -643,27 +643,68 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
         return res.status(400).json({ error: 'Config incompleta: artsoft.host/porta/utilizador' })
       }
 
-      // Query simples ao ARTSOFT para descobrir séries
+      // Descoberta de séries a partir dos documentos já emitidos em DocFch —
+      // não há tabela de catálogo de séries acessível nesta instalação
+      // (DefDocs e TipoDocCC devolveram ambos TableNotFound).
+      //
+      // LIMITAÇÃO CONHECIDA: um range TpDoc "amplo" (A:ZZZZZZZZ, 0000:ZZZZ,
+      // V000:VZZZ, etc.) devolve sempre o mesmo pequeno subconjunto de
+      // séries "E0xx" nesta instalação, mesmo quando os limites têm o
+      // comprimento correto (4 chars) — só um range cujos DOIS limites são
+      // eles próprios séries já existentes (ex: V960:V990) filtra
+      // corretamente. Isso torna impossível descobrir séries desconhecidas
+      // por range puro: um range só "acerta" quem já sabíamos que existia.
+      // Testado: ranges por letra individual, por par de letras, com/sem
+      // correlação TerFch, com/sem subconsulta Lans — mesmo resultado em
+      // todos. Fica como melhor esforço (mostra o que aparecer neste range
+      // genérico); a via fiável continua a ser a introdução manual no modal.
       const { executarPedidoArtsoft } = await import('../artsoft-sync/artsoft/connection.js')
-      const { parseXml, comoLista } = await import('../artsoft-sync/artsoft/xml.js')
+      const { parseXml, comoLista, texto } = await import('../artsoft-sync/artsoft/xml.js')
 
-      // Query simples: apenas DocFch
-      const xml = `<root>
-        <rec>
-          <DocFch />
-        </rec>
+      function classifySeriesType(code) {
+        const prefix = String(code).charAt(0).toUpperCase();
+        const typeMap = {
+          'E': { type: 'Entrada', typeName: 'Entradas (E)' },
+          'S': { type: 'Saida', typeName: 'Saídas (S)' },
+          'V': { type: 'Venda', typeName: 'Vendas (V)' },
+          'C': { type: 'Encomenda_Cliente', typeName: 'Encomendas Clientes (C)' },
+          'F': { type: 'Encomenda_Fornecedor', typeName: 'Encomendas Fornecedores (F)' }
+        };
+        return typeMap[prefix] || { type: 'Outro', typeName: 'Outro' };
+      }
+
+      const dataInicio = String(req.query.data_inicio || '20260101').replace(/-/g, '')
+      const dataFim = String(req.query.data_fim || '20301231').replace(/-/g, '')
+      const filtro =
+        `DocFch|DocData|TpDoc=A000:ZZZZ|Data=${dataInicio}:${dataFim}` +
+        ' ^TerFch|Cliente|NrCli={%DocFch.Ter.Terceiro}|Filial={%DocFch.Ter.Filial}'
+      const xml = `<root type='list' end='500' name='rec' query='${filtro}'>
+        <defcol>
+          <Serie form='%DocFch.Doc.Serie' />
+        </defcol>
       </root>`
 
-      let resposta
+      const seriesData = new Map()
       try {
-        resposta = await executarPedidoArtsoft({
+        const resposta = await executarPedidoArtsoft({
           host: config['artsoft.host'],
           porta: parseInt(config['artsoft.porta'], 10),
           utilizador: config['artsoft.utilizador'],
           senha: config['artsoft.senha'] || '',
-          xml: xml,
-          timeout: 30000,
+          xml,
+          timeout: 20000,
         })
+        const parsedRaw = parseXml(resposta)
+        const parsed = parsedRaw.root ?? parsedRaw
+        const regs = comoLista(parsed.rec)
+        for (const r of regs) {
+          const serie = texto(r?.Serie)
+          if (serie) {
+            const serieUpper = serie.toUpperCase()
+            const { type, typeName } = classifySeriesType(serieUpper)
+            seriesData.set(serieUpper, { type, typeName })
+          }
+        }
       } catch (connectErr) {
         console.error('ARTSOFT connection error:', connectErr.message)
         return res.json({
@@ -673,21 +714,16 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
         })
       }
 
-      const parsed = parseXml(resposta)
-      const docs = comoLista(parsed.rec)
-
-      // Extrair séries únicas — procura em vários caminhos possíveis
-      const series = new Set()
-      for (const doc of docs) {
-        const serie = doc?.DocSerie || doc?.['Doc.Serie'] || doc?.Serie
-        if (serie && String(serie).trim()) {
-          series.add(String(serie).trim().toUpperCase())
-        }
-      }
+      const seriesArray = Array.from(seriesData.entries()).map(([code, { type, typeName }]) => ({
+        code,
+        type,
+        typeName
+      })).sort((a, b) => a.code.localeCompare(b.code));
 
       res.json({
-        series: Array.from(series).sort(),
-        total: series.size,
+        series: seriesArray,
+        total: seriesArray.length,
+        message: 'Esta instalação ARTSOFT não expõe um catálogo de séries navegável — a lista acima é melhor esforço e pode não incluir todas as séries reais (ex: guias de transporte). Confirma manualmente as séries que precisas.',
       })
     } finally {
       client.release()
