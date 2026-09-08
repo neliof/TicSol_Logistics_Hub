@@ -850,34 +850,16 @@ app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
 
     const client = await pool.connect()
     try {
-      // Delete in order: linhas first (FK to documento), then documento, then artigos, then terceiros
-      const linhasRes = await client.query(
-        `DELETE FROM logistics.linha_documento WHERE empresa_id = $1`,
-        [empresaId]
-      )
-
+      // Delete only documentos — cascading FK deletes linhas
       const docsRes = await client.query(
         `DELETE FROM logistics.documento WHERE empresa_id = $1`,
-        [empresaId]
-      )
-
-      const artRes = await client.query(
-        `DELETE FROM logistics.artigo WHERE empresa_id = $1`,
-        [empresaId]
-      )
-
-      const tercRes = await client.query(
-        `DELETE FROM logistics.terceiro WHERE empresa_id = $1`,
         [empresaId]
       )
 
       res.json({
         success: true,
         deleted: {
-          linhas: linhasRes.rowCount || 0,
-          documentos: docsRes.rowCount || 0,
-          artigos: artRes.rowCount || 0,
-          terceiros: tercRes.rowCount || 0
+          documentos: docsRes.rowCount || 0
         }
       })
     } finally {
