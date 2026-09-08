@@ -738,6 +738,155 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
 })
 
 /**
+ * GET /api/artsoft/series/config/:modulo
+ * Retrieve series configuration for a given module (receção or expedição).
+ */
+app.get('/api/artsoft/series/config/:modulo', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const modulo = String(req.params.modulo).toLowerCase()
+    if (!['receção', 'rececao', 'expedição', 'expedicao'].includes(modulo)) {
+      return res.status(400).json({ error: 'Invalid modulo: must be receção or expedição' })
+    }
+
+    const client = await pool.connect()
+    try {
+      const result = await client.query(
+        `SELECT valor, updated_at FROM logistics.configuracao
+         WHERE empresa_id = $1 AND chave = $2`,
+        [empresaId, `series.config.${modulo}`]
+      )
+
+      if (result.rows.length === 0) {
+        return res.json({
+          modulo,
+          receção: [],
+          expedição: [],
+          updated_at: null
+        })
+      }
+
+      const config = JSON.parse(result.rows[0].valor || '{}')
+      res.json({
+        modulo,
+        receção: config.receção || [],
+        expedição: config.expedição || [],
+        updated_at: result.rows[0].updated_at
+      })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('GET /api/artsoft/series/config error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
+ * POST /api/artsoft/series/config
+ * Save series configuration for a module (stores as JSON in logistics.configuracao).
+ */
+app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const { modulo, receção, expedição } = req.body
+    if (!modulo || !['receção', 'rececao', 'expedição', 'expedicao'].includes(String(modulo).toLowerCase())) {
+      return res.status(400).json({ error: 'Invalid modulo' })
+    }
+
+    if (!Array.isArray(receção) || !Array.isArray(expedição)) {
+      return res.status(400).json({ error: 'receção and expedição must be arrays of series codes' })
+    }
+
+    const moduloNorm = String(modulo).toLowerCase().replace('ç', 'c')
+    const configValue = JSON.stringify({ receção, expedição })
+
+    const client = await pool.connect()
+    try {
+      await client.query(
+        `INSERT INTO logistics.configuracao (empresa_id, chave, valor, descricao)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (empresa_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = now()`,
+        [
+          empresaId,
+          `series.config.${moduloNorm}`,
+          configValue,
+          `Configuração de séries de documentos para ${modulo}`
+        ]
+      )
+
+      res.json({ success: true, modulo })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('POST /api/artsoft/series/config error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
+ * DELETE /api/artsoft/test-data
+ * Remove all test documents, articles, customers from logistics tables for this empresa.
+ * WARNING: Irreversible.
+ */
+app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const client = await pool.connect()
+    try {
+      // Delete in order: linhas first (FK to documento), then documento, then artigos, then terceiros
+      const linhasRes = await client.query(
+        `DELETE FROM logistics.linha_documento WHERE empresa_id = $1`,
+        [empresaId]
+      )
+
+      const docsRes = await client.query(
+        `DELETE FROM logistics.documento WHERE empresa_id = $1`,
+        [empresaId]
+      )
+
+      const artRes = await client.query(
+        `DELETE FROM logistics.artigo WHERE empresa_id = $1`,
+        [empresaId]
+      )
+
+      const tercRes = await client.query(
+        `DELETE FROM logistics.terceiro WHERE empresa_id = $1`,
+        [empresaId]
+      )
+
+      res.json({
+        success: true,
+        deleted: {
+          linhas: linhasRes.rowCount || 0,
+          documentos: docsRes.rowCount || 0,
+          artigos: artRes.rowCount || 0,
+          terceiros: tercRes.rowCount || 0
+        }
+      })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('DELETE /api/artsoft/test-data error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
  * Grava séries configuradas em logistics.configuracao.
  */
 app.post('/api/artsoft/series/save', verifyJWT, async (req, res) => {
