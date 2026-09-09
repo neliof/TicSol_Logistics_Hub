@@ -3,9 +3,11 @@ import { lerSessao, terminarSessao } from "./api";
 import Entrar from "./Entrar";
 import GuiasTransporte from "./GuiasTransporte";
 import Sincronizacoes from "./Sincronizacoes";
+import SeriesConfig from "./SeriesConfig";
 
 const PAGINAS = [
   { id: "guias", rotulo: "Guias de transporte" },
+  { id: "series-config", rotulo: "Configuração de Séries" },
   { id: "sincronizacoes", rotulo: "Sincronizações" },
 ];
 
@@ -48,6 +50,7 @@ export default function App() {
 
       <main className="conteudo">
         {pagina === "guias" && <GuiasTransporte />}
+        {pagina === "series-config" && <SeriesConfig />}
         {pagina === "sincronizacoes" && <Sincronizacoes />}
       </main>
     </div>

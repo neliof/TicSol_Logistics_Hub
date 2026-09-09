@@ -99,6 +99,21 @@ export const api = {
   sincronizarGuias() {
     return pedir("/api/artsoft/guias/sync", { method: "POST" });
   },
+
+  descobrirSeries() {
+    return pedir("/api/artsoft/series/discover");
+  },
+
+  obterSeriesConfig(modulo) {
+    return pedir(`/api/artsoft/series/config/${modulo}`);
+  },
+
+  salvarSeriesConfig(modulo, receção, expedição) {
+    return pedir("/api/artsoft/series/config", {
+      method: "POST",
+      body: JSON.stringify({ modulo, receção, expedição }),
+    });
+  },
 };
 
 /** Lê os campos guardados em conteudo_xml (JSON) de um documento. */
