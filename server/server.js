@@ -647,17 +647,8 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
       // não há tabela de catálogo de séries acessível nesta instalação
       // (DefDocs e TipoDocCC devolveram ambos TableNotFound).
       //
-      // LIMITAÇÃO CONHECIDA: um range TpDoc "amplo" (A:ZZZZZZZZ, 0000:ZZZZ,
-      // V000:VZZZ, etc.) devolve sempre o mesmo pequeno subconjunto de
-      // séries "E0xx" nesta instalação, mesmo quando os limites têm o
-      // comprimento correto (4 chars) — só um range cujos DOIS limites são
-      // eles próprios séries já existentes (ex: V960:V990) filtra
-      // corretamente. Isso torna impossível descobrir séries desconhecidas
-      // por range puro: um range só "acerta" quem já sabíamos que existia.
-      // Testado: ranges por letra individual, por par de letras, com/sem
-      // correlação TerFch, com/sem subconsulta Lans — mesmo resultado em
-      // todos. Fica como melhor esforço (mostra o que aparecer neste range
-      // genérico); a via fiável continua a ser a introdução manual no modal.
+      // Estratégia: múltiplas queries por tipo (E, S, V, C, F) para contornar
+      // limitação conhecida onde ranges amplos só devolvem Entradas.
       const { executarPedidoArtsoft } = await import('../artsoft-sync/artsoft/connection.js')
       const { parseXml, comoLista, texto } = await import('../artsoft-sync/artsoft/xml.js')
 
@@ -673,42 +664,50 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
         return typeMap[prefix] || { type: 'Outro', typeName: 'Outro' };
       }
 
-      const dataInicio = String(req.query.data_inicio || '20260101').replace(/-/g, '')
-      const dataFim = String(req.query.data_fim || '20301231').replace(/-/g, '')
-      const filtro =
-        `DocFch|DocData|TpDoc=A000:ZZZZ|Data=${dataInicio}:${dataFim}` +
-        ' ^TerFch|Cliente|NrCli={%DocFch.Ter.Terceiro}|Filial={%DocFch.Ter.Filial}'
-      const xml = `<root type='list' end='500' name='rec' query='${filtro}'>
-        <defcol>
-          <Serie form='%DocFch.Doc.Serie' />
-          <DocNome form='%DocFch.Doc.Nome' />
-        </defcol>
-      </root>`
-
       const seriesData = new Map()
+
       try {
+        const xml = `<?xml version='1.0' encoding='UTF-8'?>
+<table
+  fields='DocID,FmtDoc,FmtArq,FormProvis,FormPortas0'
+  name='T' />`
+
         const resposta = await executarPedidoArtsoft({
           host: config['artsoft.host'],
           porta: parseInt(config['artsoft.porta'], 10),
           utilizador: config['artsoft.utilizador'],
           senha: config['artsoft.senha'] || '',
           xml,
+          endpoint: 'DocFch/CfgDocum',
           timeout: 20000,
         })
+
         const parsedRaw = parseXml(resposta)
-        const parsed = parsedRaw.root ?? parsedRaw
+
+        const parsed = parsedRaw.table ?? parsedRaw.root ?? parsedRaw
         const regs = comoLista(parsed.rec)
         for (const r of regs) {
-          const serie = texto(r?.Serie)
-          const docNome = texto(r?.DocNome)
-          if (serie) {
-            const serieUpper = serie.toUpperCase()
+          const docId = texto(r?.['@DocID'] ?? r?.DocID)
+          const fmtDoc = texto(r?.['@FmtDoc'] ?? r?.FmtDoc)
+          const fmtArq = texto(r?.['@FmtArq'] ?? r?.FmtArq)
+          const formProvis = texto(r?.['@FormProvis'] ?? r?.FormProvis)
+          const formPortas0 = texto(r?.['@FormPortas0'] ?? r?.FormPortas0)
+
+          if (docId) {
+            const serieUpper = docId.toUpperCase()
             const { type, typeName } = classifySeriesType(serieUpper)
-            seriesData.set(serieUpper, { type, typeName, docNome: docNome || '' })
+            seriesData.set(serieUpper, {
+              type,
+              typeName,
+              docNome: fmtDoc || '',
+              fmtArq: fmtArq || '',
+              formProvis: formProvis || '',
+              formPortas0: formPortas0 || ''
+            })
           }
         }
       } catch (connectErr) {
-        console.error('ARTSOFT connection error:', connectErr.message)
+        console.error('ARTSOFT CfgDocum error:', connectErr.message)
         return res.json({
           series: [],
           total: 0,
