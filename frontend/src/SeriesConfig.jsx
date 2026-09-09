@@ -20,7 +20,7 @@ export default function SeriesConfig() {
 
       // Carregar configuração guardada para cada módulo
       try {
-        const confRec = await api.obterSeriesConfig("receção");
+        const confRec = await api.obterSeriesConfig("rececao");
         if (confRec?.receção) {
           setReceçãoSelecionadas(new Set(confRec.receção));
         }
@@ -29,7 +29,7 @@ export default function SeriesConfig() {
       }
 
       try {
-        const confExp = await api.obterSeriesConfig("expedição");
+        const confExp = await api.obterSeriesConfig("expedicao");
         if (confExp?.expedição) {
           setExpediçãoSelecionadas(new Set(confExp.expedição));
         }
@@ -73,12 +73,12 @@ export default function SeriesConfig() {
     setErro(null);
     try {
       await api.salvarSeriesConfig(
-        "receção",
+        "rececao",
         Array.from(receçãoSelecionadas),
         Array.from(expediçãoSelecionadas)
       );
       await api.salvarSeriesConfig(
-        "expedição",
+        "expedicao",
         Array.from(receçãoSelecionadas),
         Array.from(expediçãoSelecionadas)
       );

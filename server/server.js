@@ -751,8 +751,9 @@ app.get('/api/artsoft/series/config/:modulo', verifyJWT, async (req, res) => {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
 
-    const modulo = String(req.params.modulo).toLowerCase()
-    if (!['receção', 'rececao', 'expedição', 'expedicao'].includes(modulo)) {
+    let modulo = String(req.params.modulo).toLowerCase()
+    modulo = modulo.replace(/ç/g, 'c').replace(/ã/g, 'a')
+    if (!['rececao', 'expedicao'].includes(modulo)) {
       return res.status(400).json({ error: 'Invalid modulo: must be receção or expedição' })
     }
 
@@ -781,8 +782,8 @@ app.get('/api/artsoft/series/config/:modulo', verifyJWT, async (req, res) => {
       const config = JSON.parse(result.rows[0].valor || '{}')
       res.json({
         modulo,
-        receção: config.receção || [],
-        expedição: config.expedição || [],
+        receção: config.rececao || [],
+        expedição: config.expedicao || [],
         updated_at: result.rows[0].updated_at
       })
     } finally {
@@ -806,19 +807,17 @@ app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
     }
 
     const { modulo, receção, expedição } = req.body
-    if (!modulo || !['receção', 'rececao', 'expedição', 'expedicao'].includes(String(modulo).toLowerCase())) {
+    let moduloNorm = String(modulo).toLowerCase()
+    moduloNorm = moduloNorm.replace(/ç/g, 'c').replace(/ã/g, 'a')
+
+    if (!modulo || !['rececao', 'expedicao'].includes(moduloNorm)) {
       return res.status(400).json({ error: 'Invalid modulo' })
     }
 
     if (!Array.isArray(receção) || !Array.isArray(expedição)) {
       return res.status(400).json({ error: 'receção and expedição must be arrays of series codes' })
     }
-
-    // Chave tem de coincidir exatamente com a usada no GET (String(modulo).toLowerCase(),
-    // sem normalizar acentos) — normalizar apenas o 'ç' (e não o 'ã') criava uma 3ª
-    // variante de chave ("rececão") que nunca correspondia ao que o GET procurava.
-    const moduloNorm = String(modulo).toLowerCase()
-    const configValue = JSON.stringify({ receção, expedição })
+    const configValue = JSON.stringify({ rececao: receção, expedicao: expedição })
 
     const client = await pool.connect()
     try {
