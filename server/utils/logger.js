@@ -15,18 +15,11 @@ const pinoConfig = {
   timestamp: pino.stdTimeFunctions.isoTime,
 }
 
-const pinoTransport = isDevelopment
-  ? {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        singleLine: false,
-        ignore: 'pid,hostname',
-      },
-    }
-  : undefined
+// Development: pino.transport() causes thread-stream crashes in node-watch
+// Use simple console logging instead
+const pinoTransport = undefined
 
-export const logger = pino(pinoConfig, pinoTransport ? pino.transport(pinoTransport) : undefined)
+export const logger = pino(pinoConfig, pinoTransport)
 
 /**
  * Child logger com contexto (ex: request ID, empresa ID).
