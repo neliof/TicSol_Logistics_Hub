@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { lerSessao, terminarSessao } from "./api";
+import { useEffect, useState } from "react";
+import { guardarSessao, lerSessao, terminarSessao } from "./api";
 import Entrar from "./Entrar";
 import GuiasTransporte from "./GuiasTransporte";
 import Sincronizacoes from "./Sincronizacoes";
@@ -15,6 +15,18 @@ export default function App() {
   const sessao = lerSessao();
   const [utilizador, setUtilizador] = useState(sessao?.utilizador || null);
   const [pagina, setPagina] = useState("guias");
+
+  useEffect(() => {
+    if (!utilizador && !sessao) {
+      fetch("/auth/dev-token")
+        .then(r => r.json())
+        .then(d => {
+          guardarSessao(d.token, d.usuario);
+          setUtilizador(d.usuario);
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   if (!utilizador) {
     return <Entrar aoEntrar={setUtilizador} />;
