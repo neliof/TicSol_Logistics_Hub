@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary: #0f172a;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+  
+  body {
+    background-color: var(--bg);
+    color: var(--text-main);
+  }
+
+  code, kbd, samp, pre, .font-mono {
+    font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  }
+}
+
+/* Custom scrollbars for high-density warehouse grid tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print CSS for GS1-128 Logistic Labels & Receiving Slips */
+@media print {
+  /* Let the printer/paper picked in the OS print dialog decide the sheet
+     size (A4, A5, Zebra label roll, etc). No fixed size imposed here. */
+  @page {
+    size: auto;
+    margin: 5mm;
+  }
+
+  /* Hide EVERYTHING via visibility (display:none on ancestor would hide
+     descendants regardless of their own display value — visibility cascades
+     correctly and lets us re-show just the label subtree). */
+  body * {
+    visibility: hidden !important;
+  }
+
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Re-show the wrapper and everything inside it (labels + barcodes) */
+  .label-print-area-wrapper,
+  .label-print-area-wrapper * {
+    visibility: visible !important;
+  }
+
+  /* But keep on-screen-only helper text (e.g. "ETIQUETA 1/3") hidden */
+  .label-print-area-wrapper .no-print {
+    display: none !important;
+  }
+
+  /* Break the wrapper out of the modal's fixed/flex layout so invisible
+     ancestor boxes (header, buttons, backdrop padding) don't push it down
+     or off-page. This is the ONLY element positioned — everything below
+     it stays in normal flow so multiple etiquetas stack top-to-bottom. */
+  .label-print-area-wrapper {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* No fixed max-width/mm here — the label fills whatever paper size the
+     user picked in the printer dialog (A4, A5, Zebra 100x150mm, etc). */
+  .label-print-area {
+    background: white !important;
+    color: black !important;
+    border: 2px solid black !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 auto 0.5cm auto !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    page-break-inside: avoid;
+    page-break-after: always;
+  }
+
+  .label-print-area:last-child {
+    page-break-after: auto;
+  }
+}
+
+@keyframes laser-scan {
+  0%, 100% { top: 0%; opacity: 0.8; }
+  50% { top: 100%; opacity: 0.3; }
+}
+
+.animate-laser {
+  animation: laser-scan 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Paper Format Media Queries for Dynamic Print Sizing */
+.print-paper-zebra .label-print-area {
+  width: 98mm !important;
+  max-width: 98mm !important;
+  padding: 3mm !important;
+  margin: 0 auto !important;
+}
+
+.print-paper-a5 .label-print-area {
+  width: 138mm !important;
+  max-width: 138mm !important;
+  padding: 5mm !important;
+  margin: 0 auto !important;
+}
+
+.print-paper-a4 .label-print-area {
+  width: 185mm !important;
+  max-width: 185mm !important;
+  padding: 6mm !important;
+  margin: 0 auto !important;
+}
+
+/* Print media adjustments */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .label-print-area {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* Configuração de Séries */
+
+.series-config {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.series-config h2 {
+  margin: 0 0 16px;
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.series-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.modulo-receção,
+.modulo-expedição {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.modulo-receção h3,
+.modulo-expedição h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.lista-series {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.checkbox-serie {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.checkbox-serie:hover {
+  background: var(--bg);
+}
+
+.checkbox-serie input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.checkbox-serie .codigo {
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-weight: 600;
+  min-width: 60px;
+  color: var(--text-main);
+}
+
+.checkbox-serie .nome {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acoes {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.alerta {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.alerta-erro {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.alerta-ok {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.estado-vazio {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.btn-primario {
+  background-color: var(--accent);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-primario:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-primario:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.campo-config {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--bg);
+  color: var(--text-main);
+}
+
+.campo-config:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (max-width: 900px) {
+  .series-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+

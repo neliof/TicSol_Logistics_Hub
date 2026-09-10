@@ -1,0 +1,6 @@
+{
+  "name": "TicSol Logistics Hub - WMS",
+  "description": "Módulo de gestão de armazém B2B (WMS) para Receção, Paletização SSCC, Gestão de Stock e Reconciliação ARTSOFT.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
