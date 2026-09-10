@@ -29,7 +29,8 @@ export const GS1LabelPrintModal: React.FC<GS1LabelPrintModalProps> = ({ pallet, 
     }
   };
 
-  const formatSSCCHuman = (sscc: string) => {
+  const formatSSCCHuman = (sscc: string | undefined) => {
+    if (!sscc) return '—';
     const clean = sscc.replace(/\D/g, '');
     if (clean.length === 18) {
       return `(00) ${clean.slice(0, 1)} ${clean.slice(1, 8)} ${clean.slice(8, 17)} ${clean.slice(17)}`;
@@ -233,7 +234,7 @@ export const GS1LabelPrintModal: React.FC<GS1LabelPrintModalProps> = ({ pallet, 
                         <div className="text-[8px] text-gray-600 mt-0.5">Lote: {prod.lote} | Val: {prod.data_validade}</div>
                         <div className="mt-0.5 text-center">
                           <BarcodeRenderer
-                            value={`(01)${prod.ean_barcode}(10)${prod.lote}(15)${prod.data_validade.replace(/-/g, '').slice(2)}(37)${prod.quantidade}`}
+                            value={`(01)${prod.ean_barcode}(10)${prod.lote}(15)${(prod.data_validade || '').replace(/-/g, '').slice(2)}(37)${prod.quantidade}`}
                             height={24}
                           />
                         </div>
@@ -280,7 +281,7 @@ export const GS1LabelPrintModal: React.FC<GS1LabelPrintModalProps> = ({ pallet, 
                   GS1-128 (GTIN + LOTE + VALIDADE + QTD)
                 </span>
                 <BarcodeRenderer
-                  value={`(01)${pallet.ean_barcode}(10)${pallet.lote}(15)${pallet.data_validade.replace(/-/g, '').slice(2)}(37)${pallet.caixas_na_palete}`}
+                  value={`(01)${pallet.ean_barcode}(10)${pallet.lote}(15)${(pallet.data_validade || '').replace(/-/g, '').slice(2)}(37)${pallet.caixas_na_palete}`}
                   height={40}
                 />
               </div>
@@ -351,7 +352,7 @@ export const GS1LabelPrintModal: React.FC<GS1LabelPrintModalProps> = ({ pallet, 
                 <div className="border-b-2 border-black pb-2 mb-2 text-center">
                   <span className="text-[8px] font-bold text-gray-600 block mb-1">GS1-128</span>
                   <BarcodeRenderer
-                    value={`(01)${prod.ean_barcode}(10)${prod.lote}(15)${prod.data_validade.replace(/-/g, '').slice(2)}(37)${prod.quantidade}`}
+                    value={`(01)${prod.ean_barcode}(10)${prod.lote}(15)${(prod.data_validade || '').replace(/-/g, '').slice(2)}(37)${prod.quantidade}`}
                     height={35}
                   />
                 </div>
