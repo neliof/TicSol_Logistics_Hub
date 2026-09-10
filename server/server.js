@@ -616,6 +616,104 @@ app.post('/api/artsoft/stock/sync', verifyJWT, syncLimiter, async (req, res) => 
 })
 
 /**
+ * GET /api/artsoft/config
+ * Lê a configuração de ligação ao ARTSOFT (host/porta/utilizador/senha).
+ * Senha devolvida mascarada — nunca exposta em claro ao frontend.
+ */
+app.get('/api/artsoft/config', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
+      const result = await client.query(
+        'SELECT chave, valor FROM logistics.configuracao WHERE empresa_id = $1 AND chave LIKE $2',
+        [empresaId, 'artsoft.%']
+      )
+
+      const config = {}
+      for (const row of result.rows) {
+        config[row.chave] = row.valor
+      }
+
+      res.json({
+        host: config['artsoft.host'] || '',
+        porta: config['artsoft.porta'] || '',
+        utilizador: config['artsoft.utilizador'] || '',
+        senha: config['artsoft.senha'] ? '••••••••' : '',
+      })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('GET /api/artsoft/config error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
+ * POST /api/artsoft/config
+ * Atualiza a configuração de ligação ao ARTSOFT.
+ * Só grava a senha se vier um valor novo (não a máscara "••••••••").
+ */
+app.post('/api/artsoft/config', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const { host, porta, utilizador, senha } = req.body
+
+    if (!host || !porta || !utilizador) {
+      return res.status(400).json({ error: 'host, porta e utilizador são obrigatórios' })
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
+      const entradas = [
+        ['artsoft.host', String(host)],
+        ['artsoft.porta', String(porta)],
+        ['artsoft.utilizador', String(utilizador)],
+      ]
+
+      if (senha && senha !== '••••••••') {
+        entradas.push(['artsoft.senha', String(senha)])
+      }
+
+      for (const [chave, valor] of entradas) {
+        await client.query(
+          `INSERT INTO logistics.configuracao (empresa_id, chave, valor, descricao)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (empresa_id, chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = now()`,
+          [empresaId, chave, valor, `Configuração de ligação ARTSOFT (${chave})`]
+        )
+      }
+
+      res.json({ success: true })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('POST /api/artsoft/config error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
  * Descobre séries de documentos disponíveis no ARTSOFT.
  * Query simples: DocFch sem filtros para listar tipos de documentos.
  */
