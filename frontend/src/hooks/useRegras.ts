@@ -29,8 +29,23 @@ function regraParaRuleConfig(r: any): RuleConfig {
   };
 }
 
+const DEFAULT_RULES: RuleConfig[] = [
+  {
+    cliente_id: 'DEFAULT',
+    cliente_nome: 'Regra Padrão',
+    altura_maxima_cm: 200,
+    peso_maximo_kg: 1500,
+    vida_util_minima_porcentagem: 70,
+    permitir_palete_mista: true,
+    tipo_palete: 'EURO_120x80',
+    obriga_sscc_gs1128: true,
+    etiqueta_formato: 'A5_105x148mm',
+    regras_empilhamento: 'Sem restrições'
+  }
+];
+
 export function useRegras() {
-  const [rules, setRules] = useState<RuleConfig[]>([]);
+  const [rules, setRules] = useState<RuleConfig[]>(DEFAULT_RULES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,9 +53,12 @@ export function useRegras() {
     const carregar = async () => {
       try {
         const rows = await api.regras(100);
-        setRules(rows.map(regraParaRuleConfig));
+        const mapped = rows.map(regraParaRuleConfig);
+        setRules(mapped.length > 0 ? mapped : DEFAULT_RULES);
         setError(null);
       } catch (err) {
+        // Fallback to defaults on error
+        setRules(DEFAULT_RULES);
         setError(err instanceof Error ? err.message : 'Falha ao carregar regras.');
       } finally {
         setLoading(false);
