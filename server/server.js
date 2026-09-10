@@ -1006,18 +1006,19 @@ const TABELAS_TEST_DATA = {
   documentos: { tabela: 'logistics.documento', coluna: 'empresa_id' },
   caixas: { tabela: 'logistics.caixa', coluna: 'empresa_id' },
   etiquetas: { tabela: 'logistics.etiqueta', coluna: 'empresa_id' },
+  template_etiqueta: { tabela: 'logistics.template_etiqueta', coluna: 'empresa_id' },
   paletes: { tabela: 'logistics.palete', coluna: 'empresa_id' },
   stock: { tabela: 'logistics.artsoft_stock_snapshot', coluna: 'empresa_id' },
   execucoes_sync: { tabela: 'logistics.sincronizacao_execucao', coluna: 'empresa_id' },
   auditoria: { tabela: 'logistics.auditoria', coluna: 'empresa_id' },
-  lotes: { tabela: 'logistics.lote', coluna: 'empresa_id' },
+  lotes: { tabela: 'logistics.lote', via_produto: true },
   regras: { tabela: 'logistics.regra_logistica', coluna: 'empresa_id' },
   encomendas: { tabela: 'logistics.encomenda', coluna: 'empresa_id' },
   produtos: { tabela: 'logistics.produto', coluna: 'empresa_id' },
   clientes: { tabela: 'logistics.cliente', coluna: 'empresa_id' },
   fornecedores: { tabela: 'logistics.fornecedor', coluna: 'empresa_id' },
 }
-const ORDEM_TEST_DATA = ['documentos', 'caixas', 'etiquetas', 'paletes', 'stock', 'execucoes_sync', 'auditoria', 'lotes', 'regras', 'encomendas', 'produtos', 'clientes', 'fornecedores']
+const ORDEM_TEST_DATA = ['documentos', 'caixas', 'etiquetas', 'template_etiqueta', 'paletes', 'stock', 'execucoes_sync', 'auditoria', 'lotes', 'regras', 'encomendas', 'produtos', 'clientes', 'fornecedores']
 
 /**
  * GET /api/artsoft/test-data/contagem
@@ -1090,9 +1091,18 @@ app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
       const erros = {}
       for (const chave of ORDEM_TEST_DATA) {
         if (!pedidas.includes(chave)) continue
-        const { tabela, coluna } = TABELAS_TEST_DATA[chave]
+        const { tabela, coluna, via_produto } = TABELAS_TEST_DATA[chave]
         try {
-          const r = await client.query(`DELETE FROM ${tabela} WHERE ${coluna} = $1`, [empresaId])
+          let query, params
+          if (via_produto) {
+            // lotes: delete via produto_id (lote não tem empresa_id direto)
+            query = `DELETE FROM ${tabela} WHERE produto_id IN (SELECT id FROM logistics.produto WHERE empresa_id = $1)`
+            params = [empresaId]
+          } else {
+            query = `DELETE FROM ${tabela} WHERE ${coluna} = $1`
+            params = [empresaId]
+          }
+          const r = await client.query(query, params)
           deleted[chave] = r.rowCount || 0
         } catch (tabelaErr) {
           erros[chave] = tabelaErr.message
