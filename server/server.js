@@ -999,13 +999,28 @@ app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
 })
 
 /**
- * DELETE /api/artsoft/test-data
- * Remove all test documents, articles, customers from logistics tables for this empresa.
- * WARNING: Irreversible.
+ * Tabelas elimináveis pela UI de gestão de dados, na ordem segura de
+ * eliminação (respeita FKs: documento cascata linha_documento; stock e
+ * paletes referenciam produto; produto/terceiros por último).
  */
-app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
+const TABELAS_TEST_DATA = {
+  documentos: { tabela: 'logistics.documento', coluna: 'empresa_id' },
+  stock: { tabela: 'logistics.artsoft_stock_snapshot', coluna: 'empresa_id' },
+  paletes: { tabela: 'logistics.palete', coluna: 'empresa_id' },
+  produtos: { tabela: 'logistics.produto', coluna: 'empresa_id' },
+  clientes: { tabela: 'logistics.cliente', coluna: 'empresa_id' },
+  fornecedores: { tabela: 'logistics.fornecedor', coluna: 'empresa_id' },
+}
+const ORDEM_TEST_DATA = ['documentos', 'stock', 'paletes', 'produtos', 'clientes', 'fornecedores']
+
+/**
+ * GET /api/artsoft/test-data/contagem
+ * Devolve quantos registos existem em cada tabela eliminável, para a UI
+ * mostrar antes de decidir o que apagar.
+ */
+app.get('/api/artsoft/test-data/contagem', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -1017,18 +1032,68 @@ app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
         JSON.stringify({ empresa_id: empresaId }),
       ])
 
-      // Delete only documentos — cascading FK deletes linhas
-      const docsRes = await client.query(
-        `DELETE FROM logistics.documento WHERE empresa_id = $1`,
-        [empresaId]
-      )
+      const contagens = {}
+      for (const chave of ORDEM_TEST_DATA) {
+        const { tabela, coluna } = TABELAS_TEST_DATA[chave]
+        const r = await client.query(`SELECT COUNT(*)::int AS n FROM ${tabela} WHERE ${coluna} = $1`, [empresaId])
+        contagens[chave] = r.rows[0].n
+      }
 
-      res.json({
-        success: true,
-        deleted: {
-          documentos: docsRes.rowCount || 0
+      res.json({ contagens })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    console.error('GET /api/artsoft/test-data/contagem error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+/**
+ * DELETE /api/artsoft/test-data
+ * Remove dados de teste/sincronização das tabelas selecionadas em
+ * ?tabelas=documentos,produtos,... (default: todas). Elimina pela ordem
+ * segura de FK independentemente da ordem pedida.
+ * WARNING: Irreversível.
+ */
+app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
+  try {
+    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    if (!UUID_RE.test(empresaId)) {
+      return res.status(400).json({ error: 'Invalid empresa_id format' })
+    }
+
+    const pedidas = String(req.query.tabelas || Object.keys(TABELAS_TEST_DATA).join(','))
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    const invalidas = pedidas.filter((t) => !TABELAS_TEST_DATA[t])
+    if (invalidas.length > 0) {
+      return res.status(400).json({ error: `Tabelas desconhecidas: ${invalidas.join(', ')}` })
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('SELECT set_config($1, $2, false)', [
+        'request.jwt.claims',
+        JSON.stringify({ empresa_id: empresaId }),
+      ])
+
+      const deleted = {}
+      const erros = {}
+      for (const chave of ORDEM_TEST_DATA) {
+        if (!pedidas.includes(chave)) continue
+        const { tabela, coluna } = TABELAS_TEST_DATA[chave]
+        try {
+          const r = await client.query(`DELETE FROM ${tabela} WHERE ${coluna} = $1`, [empresaId])
+          deleted[chave] = r.rowCount || 0
+        } catch (tabelaErr) {
+          erros[chave] = tabelaErr.message
         }
-      })
+      }
+
+      res.json({ success: Object.keys(erros).length === 0, deleted, erros })
     } finally {
       client.release()
     }
