@@ -7,6 +7,8 @@ const TABELAS: { chave: string; label: string; descricao: string }[] = [
   { chave: "paletes", label: "Paletes SSCC Criadas", descricao: "logistics.palete (mock + reais)" },
   { chave: "stock", label: "Stock ARTSOFT", descricao: "logistics.artsoft_stock_snapshot" },
   { chave: "execucoes_sync", label: "Históricos de Sincronização", descricao: "logistics.sincronizacao_execucao (logs de sync)" },
+  { chave: "auditoria", label: "Logs & Auditoria", descricao: "logistics.auditoria (registro de ações)" },
+  { chave: "regras", label: "Regras de Paletização", descricao: "logistics.regra_logistica (Motor de Regras por cliente)" },
   { chave: "produtos", label: "Artigos", descricao: "logistics.produto" },
   { chave: "clientes", label: "Clientes", descricao: "logistics.cliente" },
   { chave: "fornecedores", label: "Fornecedores", descricao: "logistics.fornecedor" },
