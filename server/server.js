@@ -1041,8 +1041,15 @@ app.get('/api/artsoft/test-data/contagem', verifyJWT, async (req, res) => {
 
       const contagens = {}
       for (const chave of ORDEM_TEST_DATA) {
-        const { tabela, coluna } = TABELAS_TEST_DATA[chave]
-        const r = await client.query(`SELECT COUNT(*)::int AS n FROM ${tabela} WHERE ${coluna} = $1`, [empresaId])
+        const { tabela, coluna, via_produto } = TABELAS_TEST_DATA[chave]
+        let query
+        if (via_produto) {
+          // lotes: count via produto_id subquery
+          query = `SELECT COUNT(*)::int AS n FROM ${tabela} WHERE produto_id IN (SELECT id FROM logistics.produto WHERE empresa_id = $1)`
+        } else {
+          query = `SELECT COUNT(*)::int AS n FROM ${tabela} WHERE ${coluna} = $1`
+        }
+        const r = await client.query(query, [empresaId])
         contagens[chave] = r.rows[0].n
       }
 
