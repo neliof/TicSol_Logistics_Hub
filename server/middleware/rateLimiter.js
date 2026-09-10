@@ -31,12 +31,12 @@ export const loginLimiter = rateLimit({
 /**
  * Rate limiter para /api/artsoft/guias/sync (prevent abuse).
  *
- * 2 requests / 5 minutos por usuario
+ * 10 requests / 5 minutos por usuario (dev: often disabled via RATE_LIMIT_ENABLED=false)
  */
 export const syncLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 2,
-  message: 'Muitas requisições de sync. Limite: 2 por 5 minutos.',
+  max: 10,
+  message: 'Muitas requisições de sync. Limite: 10 por 5 minutos.',
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `${req.user?.usuario_id || req.ip}`,

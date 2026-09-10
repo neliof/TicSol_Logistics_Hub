@@ -50,7 +50,19 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
 
   // Active Client Stacking Rule (Default to Sonae MC if tenant is Sonae MC)
   const activeRuleCode = selectedTenant.includes('Sonae') ? 'SONAE_MC' : 'SOVENA';
-  const activeRule = ruleConfigs.find(r => r.cliente_id === activeRuleCode) || ruleConfigs[0];
+  const defaultRule: RuleConfig = {
+    cliente_id: 'DEFAULT',
+    cliente_nome: 'Regra Padrão',
+    altura_maxima_cm: 200,
+    peso_maximo_kg: 1500,
+    vida_util_minima_porcentagem: 70,
+    permitir_palete_mista: true,
+    tipo_palete: 'EURO_120x80',
+    obriga_sscc_gs1128: true,
+    etiqueta_formato: 'A5_105x148mm',
+    regras_empilhamento: 'Sem restrições'
+  };
+  const activeRule = ruleConfigs.find(r => r.cliente_id === activeRuleCode) || ruleConfigs[0] || defaultRule;
 
   // Calculated Pallet Inputs
   const [caixasPorCamada, setCaixasPorCamada] = useState<number>(10);

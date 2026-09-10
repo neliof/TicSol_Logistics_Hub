@@ -60,7 +60,12 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
       setSyncDataFim('');
       // Recarregar seria ideal, mas depende de passarmos callback do App
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao sincronizar');
+      const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
+      if (msg.includes('429') || msg.includes('Muitas requisições')) {
+        alert('Limite de sincronização atingido.\nAguarde 5 minutos entre sincronizações.\n\n' + msg);
+      } else {
+        alert(msg);
+      }
     } finally {
       setSyncLoading(false);
     }
