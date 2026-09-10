@@ -699,7 +699,8 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
             seriesData.set(serieUpper, {
               type,
               typeName,
-              docNome: fmtDoc || '',
+              docNome: '',
+              fmtDoc: fmtDoc || '',
               fmtArq: fmtArq || '',
               formProvis: formProvis || '',
               formPortas0: formPortas0 || ''
@@ -713,6 +714,58 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
           total: 0,
           message: `Erro ao conectar ARTSOFT: ${connectErr.message}. Introduza séries manualmente.`,
         })
+      }
+
+      // CfgDocum não devolve nome descritivo do documento (FmtDoc é o
+      // formulário de impressão, não o nome). Para obter o nome real
+      // (ex: "V/FACTURA CONTINENTE"), consultar DocFch com um range cujos
+      // limites são códigos que sabemos existir (descobertos acima) — só
+      // assim o range filtra corretamente nesta instalação.
+      const codigosPorPrefixo = new Map()
+      for (const code of seriesData.keys()) {
+        const prefix = code.charAt(0)
+        if (!codigosPorPrefixo.has(prefix)) codigosPorPrefixo.set(prefix, [])
+        codigosPorPrefixo.get(prefix).push(code)
+      }
+
+      for (const [, codigos] of codigosPorPrefixo) {
+        codigos.sort()
+        const inicio = codigos[0]
+        const fim = codigos[codigos.length - 1]
+        const filtro = `DocFch|DocData|TpDoc=${inicio}:${fim}|Data=20000101:20301231`
+        const xmlNomes = `<root type='list' end='500' name='rec' query='${filtro}'>
+          <defcol>
+            <Serie form='%DocFch.Doc.Serie' />
+            <DocNome form='%DocFch.Doc.Nome' />
+          </defcol>
+        </root>`
+
+        try {
+          const respostaNomes = await executarPedidoArtsoft({
+            host: config['artsoft.host'],
+            porta: parseInt(config['artsoft.porta'], 10),
+            utilizador: config['artsoft.utilizador'],
+            senha: config['artsoft.senha'] || '',
+            xml: xmlNomes,
+            timeout: 20000,
+          })
+          const parsedNomes = parseXml(respostaNomes)
+          const rootNomes = parsedNomes.root ?? parsedNomes
+          const regsNomes = comoLista(rootNomes.rec)
+          for (const r of regsNomes) {
+            const serie = texto(r?.Serie)
+            const docNome = texto(r?.DocNome)
+            if (serie && docNome) {
+              const serieUpper = serie.toUpperCase()
+              const existente = seriesData.get(serieUpper)
+              if (existente) {
+                existente.docNome = docNome
+              }
+            }
+          }
+        } catch (nomeErr) {
+          console.error(`Erro ao obter nomes para prefixo ${inicio[0]}:`, nomeErr.message)
+        }
       }
 
       const seriesArray = Array.from(seriesData.entries()).map(([code, { type, typeName, docNome }]) => ({
