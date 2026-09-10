@@ -478,25 +478,25 @@
       </div>
 
       <h2 id="gestao-dados">9. Gestão de Dados</h2>
-      <p>A aba Gestão de Dados é para limpeza de dados de teste ou sincronização anterior. Permite apagar seletivamente documentos, stock, paletes, artigos, clientes e fornecedores — útil antes de uma resincronização completa.</p>
+      <p>A aba Gestão de Dados é para limpeza de dados de teste ou sincronização anterior. Permite apagar seletivamente 14 tipos de registos (documentos, paletes, stock, artigos, clientes, fornecedores, históricos de sincronização, logs, regras e mais) — útil antes de uma resincronização completa. O sistema respeita todas as dependências de chaves estrangeiras e apaga em ordem segura.</p>
 
       <ol>
         <li>Clique na aba <strong>Gestão de Dados</strong>.</li>
-        <li>Vê uma lista de tabelas com contagem atual de registos (ex: 612 Documentos, 395 Stock, 11 Paletes, 11027 Produtos, 1232 Clientes, 60 Fornecedores).</li>
-        <li>Marque com <strong>checkbox</strong> quais as tabelas que quer apagar. Exemplo: se quer recarregar só os documentos, marque apenas "Documentos".</li>
+        <li>Vê uma lista expandida de 14 tabelas com contagem atual de registos (ex: Documentos, Caixas em Palete, Etiquetas de Palete, Templates de Etiqueta, Paletes SSCC, Stock ARTSOFT, Históricos de Sincronização, Logs &amp; Auditoria, Lotes de Produto, Regras de Paletização, Encomendas, Artigos, Clientes, Fornecedores).</li>
+        <li>Marque com <strong>checkbox</strong> quais as tabelas que quer apagar. Exemplo: para recarregar todos os dados, marque tudo. Para limpar só paletes, marque "Paletes SSCC Criadas".</li>
         <li>Clique em <strong>Apagar Selecionados (N)</strong> onde N é o número de tabelas marcadas.</li>
-        <li>Aparece um diálogo de confirmação listando exatamente o que vai ser apagado (ex: "Vais apagar 612 registos de Documentos. Ação irreversível. Podes resincronizar depois a partir do ARTSOFT").</li>
-        <li>Confirme a operação (não há volta atrás).</li>
+        <li>Aparece um diálogo de confirmação listando exatamente o que vai ser apagado e o total de registos (ex: "Vais apagar 11.500 registos no total. Ação irreversível. Podes resincronizar depois a partir do ARTSOFT").</li>
+        <li>Confirme a operação (não há volta atrás). O sistema elimina na ordem correta respeitando chaves estrangeiras (ex: apaga etiquetas antes de paletes, paletes antes de produtos).</li>
         <li>Após apagar, clique em <strong>Sincronizar Agora</strong> (na aba Sync ARTSOFT) para repor os dados.</li>
       </ol>
 
       <div class="box warning">
-        <strong>Aviso:</strong> Apagar dados é irreversível. Não afeta a configuração de séries nem de ligação. Use para limpar testes antes de resincronizar do ARTSOFT.
+        <strong>Aviso:</strong> Apagar dados é irreversível. Não afeta a configuração de séries nem de ligação ARTSOFT. O sistema apaga respeitando todas as dependências. Use para limpar testes antes de resincronizar do ARTSOFT.
       </div>
 
       <div class="screenshot">
-        <img src="screenshots/09-gestao-dados.png" alt="Ecrã de Gestão de Dados com lista de tabelas e contagens">
-        <div class="screenshot-caption">Gestão de Dados — selecione tabelas a apagar com checkboxes</div>
+        <img src="screenshots/09-gestao-dados.png" alt="Ecrã de Gestão de Dados com lista de 14 tabelas deletáveis e contagens">
+        <div class="screenshot-caption">Gestão de Dados — selecione até 14 tipos de tabelas a apagar com checkboxes (sistema garante ordem segura)</div>
       </div>
 
       <h2 id="motor-regras">10. Motor de Regras</h2>
