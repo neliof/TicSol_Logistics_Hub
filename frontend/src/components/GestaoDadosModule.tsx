@@ -4,8 +4,9 @@ import { AlertTriangle, Trash2, RefreshCw } from "lucide-react";
 
 const TABELAS: { chave: string; label: string; descricao: string }[] = [
   { chave: "documentos", label: "Documentos (Guias/Vendas)", descricao: "logistics.documento + linhas (cascata)" },
+  { chave: "paletes", label: "Paletes SSCC Criadas", descricao: "logistics.palete (mock + reais)" },
   { chave: "stock", label: "Stock ARTSOFT", descricao: "logistics.artsoft_stock_snapshot" },
-  { chave: "paletes", label: "Paletes SSCC", descricao: "logistics.palete" },
+  { chave: "execucoes_sync", label: "Históricos de Sincronização", descricao: "logistics.sincronizacao_execucao (logs de sync)" },
   { chave: "produtos", label: "Artigos", descricao: "logistics.produto" },
   { chave: "clientes", label: "Clientes", descricao: "logistics.cliente" },
   { chave: "fornecedores", label: "Fornecedores", descricao: "logistics.fornecedor" },
