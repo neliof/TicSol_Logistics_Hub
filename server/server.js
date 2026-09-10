@@ -1000,18 +1000,19 @@ app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
 
 /**
  * Tabelas elimináveis pela UI de gestão de dados, na ordem segura de
- * eliminação (respeita FKs: documento cascata linha_documento; stock e
- * paletes referenciam produto; produto/terceiros por último).
+ * eliminação (respeita FKs: documento cascata linha_documento; paletes
+ * referenciam documento; stock e paletes referenciam produto).
  */
 const TABELAS_TEST_DATA = {
   documentos: { tabela: 'logistics.documento', coluna: 'empresa_id' },
-  stock: { tabela: 'logistics.artsoft_stock_snapshot', coluna: 'empresa_id' },
   paletes: { tabela: 'logistics.palete', coluna: 'empresa_id' },
+  stock: { tabela: 'logistics.artsoft_stock_snapshot', coluna: 'empresa_id' },
+  execucoes_sync: { tabela: 'logistics.sincronizacao_execucao', coluna: 'empresa_id' },
   produtos: { tabela: 'logistics.produto', coluna: 'empresa_id' },
   clientes: { tabela: 'logistics.cliente', coluna: 'empresa_id' },
   fornecedores: { tabela: 'logistics.fornecedor', coluna: 'empresa_id' },
 }
-const ORDEM_TEST_DATA = ['documentos', 'stock', 'paletes', 'produtos', 'clientes', 'fornecedores']
+const ORDEM_TEST_DATA = ['documentos', 'paletes', 'stock', 'execucoes_sync', 'produtos', 'clientes', 'fornecedores']
 
 /**
  * GET /api/artsoft/test-data/contagem
