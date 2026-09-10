@@ -64,6 +64,23 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
   };
   const activeRule = ruleConfigs.find(r => r.cliente_id === activeRuleCode) || ruleConfigs[0] || defaultRule;
 
+  // Guard: ensure activeRule always exists
+  if (!activeRule) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-slate-900">Erro ao carregar regras</h3>
+              <p className="text-sm text-slate-600 mt-1">Sistema não conseguiu inicializar regras de paletização.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Calculated Pallet Inputs
   const [caixasPorCamada, setCaixasPorCamada] = useState<number>(10);
   const [numCamadas, setNumCamadas] = useState<number>(4);
