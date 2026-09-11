@@ -1,33 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { GuiaTransporte, LinhaGuia, PaletaExpedicao, ComprovanteEmbarque } from '../types/expedicao';
 import { api } from '../api';
-
-/** Mapa de séries/tipos de documento ARTSOFT → descrição legível */
-const TIPO_DOCUMENTO_MAP: Record<string, string> = {
-  'V950': 'Guia de Transporte',
-  'V960': 'Guia de Transporte',
-  'V970': 'Guia de Transporte',
-  'V980': 'Guia de Transporte',
-  'V990': 'Guia de Transporte',
-  'V991': 'Guia de Transporte',
-  'V992': 'Guia de Transporte',
-  'V993': 'Guia de Transporte',
-  'V994': 'Guia de Transporte',
-  'V995': 'Guia de Transporte',
-  'V001': 'Fatura',
-  'V010': 'Fatura',
-  'V020': 'Fatura',
-  'V050': 'Fatura',
-  'V100': 'Nota de Crédito',
-  'V110': 'Nota de Crédito',
-  'V150': 'Nota de Débito',
-  'A001': 'Devolução de Compras',
-  'A100': 'Encomenda de Compra',
-  'A200': 'Orçamento',
-  'GR': 'Guia de Receção',
-  'GT': 'Guia de Transporte',
-  'GE': 'Guia de Expedição',
-};
+import { TIPO_DOCUMENTO_MAP, parseXmlContent, getTipoDocumento, formatNomeDocumento } from '../utils/documentTypes';
 
 /** Mapeia uma linha_documento do ARTSOFT para LinhaGuia. */
 function linhaDocParaLinhaGuia(l: any, guiaId: string): LinhaGuia {
@@ -83,21 +57,11 @@ function linhaDocParaLinhaGuia(l: any, guiaId: string): LinhaGuia {
  * é aberta, não no carregamento da lista.
  */
 function docParaGuia(d: any): GuiaTransporte {
-  const x =
-    typeof d.conteudo_xml === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(d.conteudo_xml);
-          } catch {
-            return {};
-          }
-        })()
-      : d.conteudo_xml || {};
-
+  const x = parseXmlContent(d.conteudo_xml);
   const serie = d.origem_serie || '';
-  const tipoDescricao = TIPO_DOCUMENTO_MAP[serie] || d.tipo || 'Documento';
+  const tipoDescricao = getTipoDocumento(serie, d.tipo, TIPO_DOCUMENTO_MAP);
   const clienteNome = x.terceiro_nome || '';
-  const nome_documento = `${d.origem_doc_id || (serie + '-' + d.numero)} - ${tipoDescricao}`;
+  const nome_documento = formatNomeDocumento(d.origem_doc_id || (serie + '-' + d.numero), d.numero, tipoDescricao);
 
   return {
     id: d.id,
