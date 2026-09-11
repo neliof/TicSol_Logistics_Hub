@@ -439,9 +439,10 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
       const logger = (msg) => console.log(`[SYNC:${empresaId}] ${msg}`)
       const dataInicio = req.body?.data_inicio ? new Date(req.body.data_inicio) : null
       const dataFim = req.body?.data_fim ? new Date(req.body.data_fim) : null
+      const series = req.body?.series || null
 
       logger('Iniciado…')
-      const resultado = await sincronizarGuias(client, empresaId, { logger, dataInicio, dataFim })
+      const resultado = await sincronizarGuias(client, empresaId, { logger, dataInicio, dataFim, series })
 
       // NOTA: logistics.documento não tem coluna de estado/status ainda.
       // Marcar como EXPEDIDA requer migração para adicionar essa coluna.

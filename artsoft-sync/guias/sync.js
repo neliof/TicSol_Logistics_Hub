@@ -231,7 +231,7 @@ function construirPedidoGuias({
  *   ultima_execucao: {id: number, estado: string}
  * }>}
  */
-export async function sincronizarGuias(client, empresaId, { logger = () => {}, dataInicio: dataInicioParam = null, dataFim: dataFimParam = null } = {}) {
+export async function sincronizarGuias(client, empresaId, { logger = () => {}, dataInicio: dataInicioParam = null, dataFim: dataFimParam = null, series: seriesParam = null } = {}) {
   const correlationId = crypto.randomUUID();
   // Estados aceites pela constraint de logistics.sincronizacao_execucao:
   // ok | erro_comunicacao | erro_autenticacao | erro_xml | erro_funcional | incompleto
@@ -257,6 +257,9 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {}, d
       );
     }
 
+    // Usar séries do parâmetro se fornecidas, senão usar as da config
+    const seriesAtivas = seriesParam && seriesParam.length > 0 ? seriesParam : cfg.series;
+
     // Janela de datas: usa as datas do pedido se fornecidas, senão
     // hoje menos `guias.dias_retroativos` até hoje.
     let dataInicio, dataFim;
@@ -273,10 +276,10 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {}, d
 
     logger(
       `[${correlationId}] Construindo pedido… ` +
-        `séries=${cfg.series.join(";")} datas=${dataInicio}:${dataFim}`
+        `séries=${seriesAtivas.join(";")} datas=${dataInicio}:${dataFim}`
     );
     xmlPedido = construirPedidoGuias({
-      series: cfg.series,
+      series: seriesAtivas,
       pageSize: cfg.pageSize,
       dataInicio,
       dataFim,
@@ -289,7 +292,7 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {}, d
       xmlPedido.match(/<defcol>\n([\s\S]*)\n {4}<\/defcol>/)?.[1] || "";
 
     const filtroBase = construirFiltroCabecalho({
-      series: cfg.series,
+      series: seriesAtivas,
       dataInicio,
       dataFim,
     });

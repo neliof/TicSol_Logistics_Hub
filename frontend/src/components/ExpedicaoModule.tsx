@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GuiaTransporte, PaletaExpedicao, ComprovanteEmbarque } from '../types/expedicao';
 import { api } from '../api';
+import { useSeriesConfig } from '../hooks/useSeriesConfig';
 import {
   Package,
   Truck,
@@ -12,7 +13,8 @@ import {
   Thermometer,
   Send,
   Barcode,
-  Info
+  Info,
+  Calendar
 } from 'lucide-react';
 
 interface ExpedicaoModuleProps {
@@ -32,6 +34,8 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   onCreateEmbarque,
   onSelectGuia
 }) => {
+  const { expedição: seriesExpedicao } = useSeriesConfig('EXPEDICAO');
+
   const [selectedGuiaId, setSelectedGuiaId] = useState<string>(guias[0]?.id || '');
   const [showEmbarqueForm, setShowEmbarqueForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
@@ -39,6 +43,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   const [syncDataInicio, setSyncDataInicio] = useState('');
   const [syncDataFim, setSyncDataFim] = useState('');
   const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const selectedGuia = guias.find(g => g.id === selectedGuiaId) || guias[0];
 
@@ -53,19 +58,16 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   const handleSync = async () => {
     setSyncLoading(true);
     try {
-      await api.sincronizarGuias(syncDataInicio || undefined, syncDataFim || undefined);
-      alert('Guias sincronizadas com sucesso!');
+      await api.sincronizarGuias(syncDataInicio || undefined, syncDataFim || undefined, seriesExpedicao);
+      setSyncMessage(`✓ Guias de ${seriesExpedicao.join(', ')} sincronizadas!`);
       setShowSyncModal(false);
       setSyncDataInicio('');
       setSyncDataFim('');
-      // Recarregar seria ideal, mas depende de passarmos callback do App
+      setTimeout(() => setSyncMessage(null), 4000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
-      if (msg.includes('429') || msg.includes('Muitas requisições')) {
-        alert('Limite de sincronização atingido.\nAguarde 5 minutos entre sincronizações.\n\n' + msg);
-      } else {
-        alert(msg);
-      }
+      setSyncMessage(`✗ ${msg}`);
+      setTimeout(() => setSyncMessage(null), 4000);
     } finally {
       setSyncLoading(false);
     }
@@ -359,46 +361,69 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
         </div>
       )}
 
+      {/* Sync Message Notification */}
+      {syncMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-blue-500 text-white font-bold px-4 py-3 rounded-lg shadow-xl border border-blue-400 animate-pulse">
+          {syncMessage}
+        </div>
+      )}
+
       {/* Sync Modal */}
       {showSyncModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center rounded-lg z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Sincronizar Documentos do ARTSOFT</h2>
-            <div className="space-y-3 mb-6">
+        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              Sincronizar Documentos
+            </h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Sincroniza guias configuradas {seriesExpedicao.length > 0 ? `(séries: ${seriesExpedicao.join(', ')})` : '(sem séries configuradas)'} com intervalo de datas (opcional).
+            </p>
+            <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Data Início</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Data Início (opcional)
+                </label>
                 <input
                   type="date"
                   value={syncDataInicio}
                   onChange={(e) => setSyncDataInicio(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Data Fim</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Data Fim (opcional)
+                </label>
                 <input
                   type="date"
                   value={syncDataFim}
                   onChange={(e) => setSyncDataFim(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <p className="text-xs text-slate-500">Deixa vazio para sincronizar todas as guias</p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowSyncModal(false)}
                 disabled={syncLoading}
-                className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-300 disabled:opacity-50 transition-all"
+                className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSync}
                 disabled={syncLoading}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white font-semibold text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {syncLoading ? 'A sincronizar…' : 'Sincronizar'}
+                {syncLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  'Sincronizar'
+                )}
               </button>
             </div>
           </div>

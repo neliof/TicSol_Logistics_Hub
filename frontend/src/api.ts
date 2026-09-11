@@ -179,10 +179,11 @@ export const api = {
     return pedir<ExecucaoSync[]>(`/rest/v1/sincronizacao_execucao?limit=${limite}`);
   },
 
-  sincronizarGuias(dataInicio?: string, dataFim?: string) {
+  sincronizarGuias(dataInicio?: string, dataFim?: string, series?: string[]) {
     const body: any = {};
     if (dataInicio) body.data_inicio = dataInicio;
     if (dataFim) body.data_fim = dataFim;
+    if (series && series.length > 0) body.series = series;
     return pedir<ResultadoSync>('/api/artsoft/guias/sync', {
       method: 'POST',
       body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
