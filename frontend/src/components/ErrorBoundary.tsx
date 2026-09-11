@@ -1,7 +1,7 @@
-import React, { ReactNode, ErrorInfo } from 'react';
+import React from 'react';
 
 interface Props {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 interface State {
@@ -9,22 +9,23 @@ interface State {
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
+  props!: Props;
+  state!: State;
+
   constructor(props: Props) {
     super(props);
     this.state = { error: null };
   }
 
-  state: State = { error: null };
-
   static getDerivedStateFromError(error: Error): State {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, info.componentStack);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error('ErrorBoundary caught:', error, errorInfo.componentStack);
   }
 
-  render() {
+  render(): React.ReactNode {
     if (this.state.error) {
       return (
         <div style={{ padding: 24, fontFamily: 'monospace', color: '#991b1b', background: '#fee2e2' }}>
@@ -35,7 +36,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             {this.state.error.stack}
           </pre>
           <button
-            onClick={() => this.setState({ error: null })}
+            onClick={() => (this as any).setState({ error: null })}
             style={{ marginTop: 12, padding: '8px 16px', cursor: 'pointer' }}
           >
             Tentar novamente
