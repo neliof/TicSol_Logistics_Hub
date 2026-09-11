@@ -30,6 +30,28 @@ function snapshotParaStock(r: LinhaReconciliacao): StockPosition {
   };
 }
 
+/** Mapeia documento ARTSOFT (de logistics.documento) para ReceivingOrder */
+function docParaReceivingOrder(d: any): ReceivingOrder {
+  const xml = typeof d.conteudo_xml === 'string'
+    ? (() => { try { return JSON.parse(d.conteudo_xml); } catch { return {}; } })()
+    : d.conteudo_xml || {};
+
+  return {
+    id: d.id,
+    numero_guia: d.numero || d.origem_doc_id || '',
+    serie: d.origem_serie,
+    numero_encomenda_artsoft: xml.pedido_origem || '',
+    fornecedor_id: d.fornecedor_id || '',
+    fornecedor_nome: xml.terceiro_nome || '',
+    fornecedor_nif: xml.terceiro_nif || '',
+    data_agendada: d.data_emissao || '',
+    estado: 'PENDENTE' as const,
+    doc_origem: d.origem_doc_id || '',
+    observacoes: xml.observacoes || '',
+    linhas: [], // Carregado posteriormente se necessário
+  };
+}
+
 // Test data: mock receiving orders (temporary until API is available)
 const MOCK_RECEIVING_ORDERS: ReceivingOrder[] = [
   {
@@ -84,9 +106,10 @@ export function useWMSData() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [recon, paletesRows] = await Promise.all([
+        const [recon, paletesRows, docsRows] = await Promise.all([
           api.reconciliacaoStock(500),
           api.paletes(500).catch(() => [] as any[]),
+          api.listarDocumentos(100).catch(() => [] as any[]),
         ]);
 
         setStock(
@@ -95,9 +118,17 @@ export function useWMSData() {
             .map(snapshotParaStock)
         );
         setPallets(paletesRows as unknown as PalletSSCC[]);
+        setOrders(
+          (docsRows || [])
+            .map(docParaReceivingOrder)
+            .filter(o => o.numero_guia) // Ignora documentos sem número
+        );
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Falha ao carregar dados do WMS.');
+        console.warn('Erro ao carregar dados (usando mocks):', err);
+        // Fallback para mock data em caso de erro (dev phase)
+        setOrders(MOCK_RECEIVING_ORDERS);
+        setError(null);
       } finally {
         setLoading(false);
       }
