@@ -7,3 +7,13 @@ dist/
 
 # Capturas temporárias de revisão do guia
 docs/imagens/_revisao-*.png
+
+# IDE e artefactos
+.superpowers/
+frontend/.worktrees/
+.worktrees/
+
+# Backups e temporários
+*.bak
+*.tmp
+*.old
