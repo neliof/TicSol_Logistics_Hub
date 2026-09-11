@@ -36,10 +36,14 @@ function docParaReceivingOrder(d: any): ReceivingOrder {
     ? (() => { try { return JSON.parse(d.conteudo_xml); } catch { return {}; } })()
     : d.conteudo_xml || {};
 
+  // Nome do documento: observações → pedido origem → terceiro nome
+  const nome = xml.observacoes || xml.pedido_origem || xml.terceiro_nome || '';
+
   return {
     id: d.id,
     numero_guia: d.numero || d.origem_doc_id || '',
     serie: d.origem_serie,
+    nome_documento: nome,
     numero_encomenda_artsoft: xml.pedido_origem || '',
     fornecedor_id: d.fornecedor_id || '',
     fornecedor_nome: xml.terceiro_nome || '',
@@ -58,6 +62,7 @@ const MOCK_RECEIVING_ORDERS: ReceivingOrder[] = [
     id: 'gr-001',
     numero_guia: 'GR-88421/2026',
     serie: 'GR',
+    nome_documento: 'Fornecedor A - Lisboa',
     fornecedor_nome: 'Fornecedor A - Lisboa',
     data_recebimento: '2026-09-05T10:30:00Z',
     status: 'PENDENTE',

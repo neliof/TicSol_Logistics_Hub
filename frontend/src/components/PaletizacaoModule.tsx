@@ -255,7 +255,7 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
                 >
                   {orders.map(o => (
                     <option key={o.id} value={o.id}>
-                      {o.serie ? `${o.serie}/` : ''}{o.numero_guia} - {o.fornecedor_nome}
+                      {o.serie ? `${o.serie}/` : ''}{o.numero_guia}{o.nome_documento ? ` - ${o.nome_documento}` : ''}
                     </option>
                   ))}
                 </select>

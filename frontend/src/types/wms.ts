@@ -15,6 +15,7 @@ export interface ReceivingOrder {
   id: string;
   numero_guia: string;
   serie?: string; // Série ARTSOFT (ex: "GR", "V990") — identificação completa: serie/numero
+  nome_documento?: string; // Descrição do documento (ex: nome do cliente, observações)
   numero_encomenda_artsoft: string;
   fornecedor_id: string;
   fornecedor_nome: string;
