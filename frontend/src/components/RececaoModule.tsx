@@ -410,10 +410,10 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
             </div>
           </div>
         )}
-        </div>
       </div>
+    </div>
 
-      {/* Sync Message Notification */}
+    {/* Sync Message Notification */}
       {syncMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-blue-500 text-white font-bold px-4 py-3 rounded-lg shadow-xl border border-blue-400 animate-pulse">
           {syncMessage}
