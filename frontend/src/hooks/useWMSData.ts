@@ -35,6 +35,7 @@ const MOCK_RECEIVING_ORDERS: ReceivingOrder[] = [
   {
     id: 'gr-001',
     numero_guia: 'GR-88421/2026',
+    serie: 'GR',
     fornecedor_nome: 'Fornecedor A - Lisboa',
     data_recebimento: '2026-09-05T10:30:00Z',
     status: 'PENDENTE',

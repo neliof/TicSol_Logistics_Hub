@@ -99,7 +99,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
       hora_saida: new Date().toLocaleTimeString('pt-PT'),
       data_saida: new Date().toISOString().slice(0, 10),
       operador_embarque: 'Op. Expedição #60',
-      observacoes: `Guia ${selectedGuia.numero_guia} - Cliente: ${selectedGuia.cliente_nome}`,
+      observacoes: `Guia ${selectedGuia.serie ? `${selectedGuia.serie}/` : ''}${selectedGuia.numero_guia} - Cliente: ${selectedGuia.cliente_nome}`,
       status: 'EMBARQUE_CONFIRMADO'
     };
 

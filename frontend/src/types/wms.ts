@@ -14,6 +14,7 @@ export type AppTab =
 export interface ReceivingOrder {
   id: string;
   numero_guia: string;
+  serie?: string; // Série ARTSOFT (ex: "GR", "V990") — identificação completa: serie/numero
   numero_encomenda_artsoft: string;
   fornecedor_id: string;
   fornecedor_nome: string;
