@@ -2,6 +2,33 @@ import { useCallback, useEffect, useState } from 'react';
 import { GuiaTransporte, LinhaGuia, PaletaExpedicao, ComprovanteEmbarque } from '../types/expedicao';
 import { api } from '../api';
 
+/** Mapa de séries/tipos de documento ARTSOFT → descrição legível */
+const TIPO_DOCUMENTO_MAP: Record<string, string> = {
+  'V950': 'Guia de Transporte',
+  'V960': 'Guia de Transporte',
+  'V970': 'Guia de Transporte',
+  'V980': 'Guia de Transporte',
+  'V990': 'Guia de Transporte',
+  'V991': 'Guia de Transporte',
+  'V992': 'Guia de Transporte',
+  'V993': 'Guia de Transporte',
+  'V994': 'Guia de Transporte',
+  'V995': 'Guia de Transporte',
+  'V001': 'Fatura',
+  'V010': 'Fatura',
+  'V020': 'Fatura',
+  'V050': 'Fatura',
+  'V100': 'Nota de Crédito',
+  'V110': 'Nota de Crédito',
+  'V150': 'Nota de Débito',
+  'A001': 'Devolução de Compras',
+  'A100': 'Encomenda de Compra',
+  'A200': 'Orçamento',
+  'GR': 'Guia de Receção',
+  'GT': 'Guia de Transporte',
+  'GE': 'Guia de Expedição',
+};
+
 /** Mapeia uma linha_documento do ARTSOFT para LinhaGuia. */
 function linhaDocParaLinhaGuia(l: any, guiaId: string): LinhaGuia {
   const extra = l.dados_extra || {};
@@ -67,11 +94,17 @@ function docParaGuia(d: any): GuiaTransporte {
         })()
       : d.conteudo_xml || {};
 
+  const serie = d.origem_serie || '';
+  const tipoDescricao = TIPO_DOCUMENTO_MAP[serie] || d.tipo || 'Documento';
+  const clienteNome = x.terceiro_nome || '';
+  const nome_documento = clienteNome ? `${tipoDescricao} - ${clienteNome}` : tipoDescricao;
+
   return {
     id: d.id,
     numero_guia: d.numero || d.origem_doc_id || '',
     serie: d.origem_serie || undefined,  // Série ARTSOFT para filtrar por módulo
-    cliente_nome: x.terceiro_nome || '',
+    nome_documento,
+    cliente_nome: clienteNome,
     cliente_nif: x.terceiro_nif || '',
     morada_entrega: x.morada_descarga || x.terceiro_morada || '',
     cidade_entrega: x.terceiro_localidade || '',

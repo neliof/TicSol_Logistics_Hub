@@ -363,7 +363,7 @@ export const ExpedicaoPaletizacaoModule: React.FC<ExpedicaoPaletizacaoModuleProp
                     }`}
                   >
                     <div className="font-mono font-bold text-purple-700 text-[11px]">{g.serie ? `${g.serie}/` : ''}{g.numero_guia}</div>
-                    <div className="text-[10px] text-slate-600 truncate">{g.serie ? g.cliente_nome : (g.nome_documento || g.cliente_nome)}</div>
+                    <div className="text-[10px] text-slate-600 truncate">{g.nome_documento || g.cliente_nome}</div>
                   </button>
                 ))}
               </div>

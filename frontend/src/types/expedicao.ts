@@ -6,6 +6,7 @@ export interface GuiaTransporte {
   id: string;
   numero_guia: string; // GT-2026-0051 (gerada pelo ARTSOFT Imefar)
   serie?: string; // Série ARTSOFT (ex: "GT", "GR", "V960") — usado para filtrar por módulo
+  nome_documento?: string; // Descrição completa: "Guia de Transporte - Cliente Nome"
   cliente_nome: string; // Sonae MC, Nívea, Tesa, Tena, etc
   cliente_nif: string;
   morada_entrega: string;

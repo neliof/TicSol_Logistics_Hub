@@ -168,7 +168,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
                 }`}
               >
                 <div className="flex items-start justify-between mb-1">
-                  <span className="font-mono font-bold text-xs text-slate-900">{guia.numero_guia}</span>
+                  <span className="font-mono font-bold text-xs text-slate-900">{guia.serie ? `${guia.serie}/` : ''}{guia.numero_guia}</span>
                   <span
                     className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
                       guia.status === 'RECEBIDA'
@@ -200,7 +200,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-600">Guia:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedGuia.numero_guia}</span>
+                  <span className="font-mono font-bold text-slate-900">{selectedGuia.serie ? `${selectedGuia.serie}/` : ''}{selectedGuia.numero_guia}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Cliente:</span>
