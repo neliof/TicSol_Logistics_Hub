@@ -2,6 +2,24 @@ import { useEffect, useState } from 'react';
 import { ReceivingOrder, PalletSSCC, StockPosition } from '../types/wms';
 import { api, LinhaReconciliacao } from '../api';
 
+/** Mapa de séries/tipos de documento ARTSOFT → descrição legível */
+const TIPO_DOCUMENTO_MAP: Record<string, string> = {
+  'V990': 'Guia de Transporte',
+  'V980': 'Guia de Transporte',
+  'V970': 'Guia de Transporte',
+  'V960': 'Guia de Transporte',
+  'V950': 'Guia de Transporte',
+  'V001': 'Fatura',
+  'V010': 'Fatura',
+  'V100': 'Crédito',
+  'A001': 'Devolução',
+  'GR': 'Guia Receção',
+  'GT': 'Guia Transporte',
+  'GE': 'Guia Expedição',
+  'NC': 'Nota Crédito',
+  'ND': 'Nota Débito',
+};
+
 /**
  * Converte uma linha da vista de reconciliação (saldo ARTSOFT por produto) numa
  * StockPosition. O snapshot é o saldo contabilístico do ERP, não uma posição
@@ -36,8 +54,13 @@ function docParaReceivingOrder(d: any): ReceivingOrder {
     ? (() => { try { return JSON.parse(d.conteudo_xml); } catch { return {}; } })()
     : d.conteudo_xml || {};
 
-  // Nome do documento: observações → pedido origem → terceiro nome
-  const nome = xml.observacoes || xml.pedido_origem || xml.terceiro_nome || '';
+  // Tipo de documento: lookup por série/tipo_saft
+  const serie = d.origem_serie || '';
+  const tipoDescricao = TIPO_DOCUMENTO_MAP[serie] || d.tipo || 'Documento';
+
+  // Nome do documento: tipo_documento + observações/pedido_origem/terceiro_nome
+  const detalhe = xml.observacoes || xml.pedido_origem || xml.terceiro_nome || '';
+  const nome = detalhe ? `${tipoDescricao} - ${detalhe}` : tipoDescricao;
 
   return {
     id: d.id,
@@ -62,10 +85,10 @@ const MOCK_RECEIVING_ORDERS: ReceivingOrder[] = [
     id: 'gr-001',
     numero_guia: 'GR-88421/2026',
     serie: 'GR',
-    nome_documento: 'Fornecedor A - Lisboa',
+    nome_documento: 'Guia Receção - Fornecedor A - Lisboa',
     fornecedor_nome: 'Fornecedor A - Lisboa',
-    data_recebimento: '2026-09-05T10:30:00Z',
-    status: 'PENDENTE',
+    data_agendada: '2026-09-05T10:30:00Z',
+    estado: 'PENDENTE',
     linhas: [
       {
         id: 'linha-001-1',
