@@ -12,7 +12,9 @@ import {
   Building2,
   Database,
   Radio,
-  LogOut
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -35,24 +37,53 @@ export const Navbar: React.FC<NavbarProps> = ({
   aoSair
 }) => {
   const [artsoftHost, setArtsoftHost] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     api.obterArtsoftConfig()
       .then((c) => setArtsoftHost(c.host || null))
       .catch(() => setArtsoftHost(null));
   }, []);
-  const tabs: { id: AppTab; label: string; icon: React.ReactNode; badge?: string }[] = [
-    { id: 'rececao', label: 'Receção', icon: <Building2 className="w-4 h-4" />, badge: '3 Guias' },
-    { id: 'paletizacao', label: 'Paletização Receção', icon: <Boxes className="w-4 h-4" />, badge: 'SSCC GS1' },
-    { id: 'expedicao', label: 'Expedição', icon: <Truck className="w-4 h-4" />, badge: 'Imefar' },
-    { id: 'paletizacao_expedicao', label: 'Paletização Expedição', icon: <Layers className="w-4 h-4" />, badge: 'Auto' },
-    { id: 'stock_mapa', label: 'Stock & Mapa', icon: <Layers className="w-4 h-4" /> },
-    { id: 'artsoft_sync', label: 'Sync ARTSOFT', icon: <RefreshCw className="w-4 h-4" />, badge: 'ERP' },
-    { id: 'series_config', label: 'Configuração de Séries', icon: <Database className="w-4 h-4" /> },
-    { id: 'artsoft_config', label: 'Ligação ARTSOFT', icon: <Sliders className="w-4 h-4" /> },
-    { id: 'gestao_dados', label: 'Gestão de Dados', icon: <ShieldAlert className="w-4 h-4" /> },
-    { id: 'regras', label: 'Motor de Regras', icon: <Sliders className="w-4 h-4" /> },
-    { id: 'auditoria', label: 'Logs & Auditoria', icon: <ShieldAlert className="w-4 h-4" /> }
+
+  interface TabItem {
+    id: AppTab;
+    label: string;
+    icon: React.ReactNode;
+    badge?: string;
+  }
+
+  interface TabGroup {
+    name: string;
+    tabs: TabItem[];
+  }
+
+  const tabGroups: TabGroup[] = [
+    {
+      name: 'Receção',
+      tabs: [
+        { id: 'rececao', label: 'Receção', icon: <Building2 className="w-4 h-4" />, badge: '3 Guias' },
+        { id: 'paletizacao', label: 'Paletização Receção', icon: <Boxes className="w-4 h-4" />, badge: 'SSCC GS1' }
+      ]
+    },
+    {
+      name: 'Expedição',
+      tabs: [
+        { id: 'expedicao', label: 'Expedição', icon: <Truck className="w-4 h-4" />, badge: 'Imefar' },
+        { id: 'paletizacao_expedicao', label: 'Paletização Expedição', icon: <Layers className="w-4 h-4" />, badge: 'Auto' }
+      ]
+    },
+    {
+      name: 'Admin',
+      tabs: [
+        { id: 'stock_mapa', label: 'Stock & Mapa', icon: <Layers className="w-4 h-4" /> },
+        { id: 'artsoft_sync', label: 'Sync ARTSOFT', icon: <RefreshCw className="w-4 h-4" />, badge: 'ERP' },
+        { id: 'series_config', label: 'Configuração de Séries', icon: <Database className="w-4 h-4" /> },
+        { id: 'artsoft_config', label: 'Ligação ARTSOFT', icon: <Sliders className="w-4 h-4" /> },
+        { id: 'gestao_dados', label: 'Gestão de Dados', icon: <ShieldAlert className="w-4 h-4" /> },
+        { id: 'regras', label: 'Motor de Regras', icon: <Sliders className="w-4 h-4" /> },
+        { id: 'auditoria', label: 'Logs & Auditoria', icon: <ShieldAlert className="w-4 h-4" /> }
+      ]
+    }
   ];
 
   return (
@@ -144,37 +175,99 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar */}
-        <nav className="flex flex-wrap items-center gap-1.5 pt-2 pb-1">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-t-md font-medium text-xs sm:text-sm whitespace-nowrap transition-all border-b-2 ${
-                  isActive
-                    ? 'bg-slate-800 text-white border-blue-500 font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-transparent'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-                {tab.badge && (
-                  <span
-                    className={`px-1.5 py-0.5 text-[10px] font-mono rounded font-semibold ${
-                      isActive
-                        ? 'bg-blue-500/20 text-blue-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+        {/* Navigation Tabs Bar with Groups */}
+        <div className="flex items-center justify-between pt-2 pb-1">
+          {/* Desktop Navigation */}
+          <nav className="hidden lg:flex flex-wrap items-center gap-6 flex-1">
+            {tabGroups.map((group) => (
+              <div key={group.name} className="flex items-center gap-1">
+                {/* Group Label */}
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2">
+                  {group.name}
+                </span>
+                {/* Group Tabs */}
+                <div className="flex items-center gap-1">
+                  {group.tabs.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                        }`}
+                      >
+                        {tab.icon}
+                        <span className="hidden sm:inline">{tab.label}</span>
+                        {tab.badge && (
+                          <span
+                            className={`px-1.5 py-0.5 text-[10px] font-mono rounded font-semibold ${
+                              isActive
+                                ? 'bg-blue-500/30 text-blue-200'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {tab.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden flex items-center gap-2 px-3 py-2 text-slate-300 hover:text-white transition-colors"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-slate-800 pt-2 pb-3">
+            {tabGroups.map((group) => (
+              <div key={group.name} className="mb-4">
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-3 py-2">
+                  {group.name}
+                </h3>
+                <div className="space-y-1">
+                  {group.tabs.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all ${
+                          isActive
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                        }`}
+                      >
+                        {tab.icon}
+                        <span>{tab.label}</span>
+                        {tab.badge && (
+                          <span className="ml-auto text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded font-mono">
+                            {tab.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </header>
   );
