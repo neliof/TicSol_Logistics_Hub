@@ -134,17 +134,10 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
     }
   };
 
-  const filteredOrders = orders.filter(ord => {
-    const matchesStatus = statusFilter === 'TODOS' || ord.estado === statusFilter;
-    const matchesQuery = 
-      ord.numero_guia.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ord.fornecedor_nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ord.doc_origem.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStatus && matchesQuery;
-  });
+  const filteredOrders = statusFilter === 'TODOS' ? orders : orders.filter(ord => ord.estado === statusFilter);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-4 h-screen">
       {/* Toast Notification */}
       {notification && (
         <div className="fixed bottom-6 right-6 z-50 bg-emerald-500 text-slate-950 font-bold px-4 py-3 rounded-lg shadow-xl flex items-center gap-2 border border-emerald-400 animate-bounce">
@@ -153,129 +146,97 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
         </div>
       )}
 
-      {/* Top Header Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Truck className="w-6 h-6 text-blue-600" />
-            Ecrã de Receção de Mercadoria (Cais WMS)
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Registo de chegada, verificação de lotes/validade, controlo de danos e encaminhamento para paletização.
-          </p>
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-lg shrink-0">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-3">
+            <Truck className="w-6 h-6" />
+            <h1 className="text-2xl font-bold">Receção — Cais WMS</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSyncModal(true)}
+              disabled={syncLoading}
+              className="px-3 py-1.5 bg-white text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-all"
+            >
+              {syncLoading ? 'A sincronizar…' : 'Sincronizar Documentos'}
+            </button>
+            <button
+              onClick={onOpenScanner}
+              className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Scan className="w-4 h-4 text-amber-400" />
+              Escanear
+            </button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowSyncModal(true)}
-            disabled={syncLoading}
-            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
-          >
-            <Calendar className="w-4 h-4" />
-            {syncLoading ? 'A sincronizar…' : 'Sincronizar Documentos'}
-          </button>
-          <button
-            onClick={onOpenScanner}
-            className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
-          >
-            <Scan className="w-4 h-4 text-amber-400" />
-            Escanear Artigo EAN
-          </button>
-        </div>
+        <p className="text-blue-100">Verificação de lotes/validade, controlo de danos e encaminhamento</p>
       </div>
 
-      {/* Main Grid: Orders Sidebar + Detailed Order Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Column: Orders List (4 cols) */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Pesquisar por Guia ou Fornecedor..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            {/* Status Filter Badges */}
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              {['TODOS', 'EM_RECECAO', 'PENDENTE', 'CONCLUIDO'].map(st => (
-                <button
-                  key={st}
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-2.5 py-1 text-[11px] font-mono rounded-md whitespace-nowrap transition-colors ${
-                    statusFilter === st
-                      ? 'bg-slate-900 text-white font-semibold shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {st.replace('_', ' ')}
-                </button>
-              ))}
-            </div>
+      {/* Main 3-Column Layout */}
+      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
+        {/* Column 1: Orders List */}
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-slate-900 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Recepções
+            </h2>
+            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-mono font-bold">
+              {filteredOrders.length}
+            </span>
           </div>
 
-          {/* Orders Cards List */}
-          <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-            {filteredOrders.map(ord => {
-              const isSelected = ord.id === selectedOrderId;
-              return (
-                <div
-                  key={ord.id}
-                  onClick={() => setSelectedOrderId(ord.id)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-blue-50/60 border-blue-500 shadow-sm ring-1 ring-blue-500'
-                      : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <span className="font-mono text-xs font-bold text-blue-600 block">{ord.numero_guia}</span>
-                      <h4 className="font-semibold text-sm text-slate-900 line-clamp-1">{ord.fornecedor_nome}</h4>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded ${
-                        ord.estado === 'CONCLUIDO'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : ord.estado === 'EM_RECECAO'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
-                      }`}
-                    >
-                      {ord.estado}
-                    </span>
-                  </div>
+          {/* Status Filter */}
+          <div className="px-4 py-2 border-b border-slate-100 bg-white">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full text-xs px-2 py-1 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="TODOS">Todos status</option>
+              <option value="EM_RECECAO">Em Receção</option>
+              <option value="PENDENTE">Pendente</option>
+              <option value="CONCLUIDO">Concluído</option>
+            </select>
+          </div>
 
-                  <div className="text-xs text-slate-500 space-y-1 font-mono">
-                    <div className="flex justify-between">
-                      <span>Doc Origem:</span>
-                      <span className="text-slate-800 font-medium">{ord.doc_origem}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Cais Atribuído:</span>
-                      <span className="text-slate-800 font-medium">{ord.cais_atribuido || 'Cais 01'}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-slate-100 text-[11px] mt-1">
-                      <span>Linhas: {ord.linhas.length}</span>
-                      <span className="text-blue-600 font-bold">
-                        {ord.linhas.reduce((acc, l) => acc + l.qtd_recebida_caixas, 0)} / {ord.linhas.reduce((acc, l) => acc + l.qtd_esperada_caixas, 0)} Cx
-                      </span>
-                    </div>
-                  </div>
+          {/* Orders Scroll */}
+          <div className="flex-1 overflow-y-auto">
+            {filteredOrders.map((ord) => (
+              <button
+                key={ord.id}
+                onClick={() => setSelectedOrderId(ord.id)}
+                className={`w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-blue-50 transition-all ${
+                  selectedOrderId === ord.id ? 'bg-blue-50 border-l-4 border-l-blue-600' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between mb-1">
+                  <span className="font-mono font-bold text-xs text-slate-900">{ord.numero_guia}</span>
+                  <span
+                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                      ord.estado === 'EM_RECECAO'
+                        ? 'bg-amber-100 text-amber-700'
+                        : ord.estado === 'CONCLUIDO'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {ord.estado.replace(/_/g, ' ')}
+                  </span>
                 </div>
-              );
-            })}
+                <div className="text-xs text-slate-600 truncate">{ord.fornecedor_nome}</div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {ord.linhas.length} linhas • {ord.linhas.reduce((sum, l) => sum + l.qtd_recebida_caixas, 0)}/{ord.linhas.reduce((sum, l) => sum + l.qtd_esperada_caixas, 0)} Cx
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Right Column: Active Order Details & Receiving Lines Form (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* Column 2: Order Details */}
+        {selectedOrder && (
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 space-y-4 overflow-y-auto h-full">
           {selectedOrder ? (
             <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
               
