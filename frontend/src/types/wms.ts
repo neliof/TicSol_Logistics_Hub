@@ -34,6 +34,7 @@ export interface ReceivingOrder {
 
 export interface ReceivingLine {
   id: string;
+  nr_linha?: number; // Sequential line number within receiving order
   guia_id: string;
   artigo_codigo: string;
   artigo_descricao: string;
