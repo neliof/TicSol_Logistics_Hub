@@ -235,68 +235,65 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
         </div>
 
         {/* Column 2: Order Details */}
-        {selectedOrder && (
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 space-y-4 overflow-y-auto h-full">
-          {selectedOrder ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
-              
-              {/* Order Metadata Bar */}
-              <div className="border-b border-slate-200 pb-5">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-mono font-bold rounded border border-blue-200">
-                        {selectedOrder.numero_guia}
-                      </span>
-                      <span className="text-xs text-slate-500 font-mono">
-                        Encomenda ARTSOFT: {selectedOrder.numero_encomenda_artsoft}
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-900 mt-1">{selectedOrder.fornecedor_nome}</h3>
-                  </div>
-
+        {selectedOrder ? (
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 space-y-6 overflow-y-auto h-full">
+            {/* Order Metadata Bar */}
+            <div className="border-b border-slate-200 pb-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+                <div>
                   <div className="flex items-center gap-2">
-                    {selectedOrder.estado !== 'CONCLUIDO' && (
-                      <button
-                        onClick={handleCompleteReceiving}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        Concluir Receção na Guia
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grid Metadata details */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs font-mono">
-                  <div>
-                    <span className="text-slate-500 block">Motorista:</span>
-                    <span className="text-slate-800 font-semibold">{selectedOrder.motorista || 'N/D'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Matrícula:</span>
-                    <span className="text-slate-800 font-semibold">{selectedOrder.matricula_veiculo || 'N/D'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Temperatura Cais:</span>
-                    <span className="text-amber-700 font-semibold flex items-center gap-1">
-                      <Thermometer className="w-3.5 h-3.5 text-amber-600" />
-                      {selectedOrder.temperatura_veiculo_c ?? 18}°C
+                    <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-mono font-bold rounded border border-blue-200">
+                      {selectedOrder.numero_guia}
+                    </span>
+                    <span className="text-xs text-slate-500 font-mono">
+                      Encomenda ARTSOFT: {selectedOrder.numero_encomenda_artsoft}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 block">Chegada:</span>
-                    <span className="text-slate-800 font-semibold">{selectedOrder.data_chegada || 'Em curso'}</span>
-                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 mt-1">{selectedOrder.fornecedor_nome}</h3>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {selectedOrder.estado !== 'CONCLUIDO' && (
+                    <button
+                      onClick={handleCompleteReceiving}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Concluir Receção na Guia
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Grid Metadata details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs font-mono">
+                <div>
+                  <span className="text-slate-500 block">Motorista:</span>
+                  <span className="text-slate-800 font-semibold">{selectedOrder.motorista || 'N/D'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Matrícula:</span>
+                  <span className="text-slate-800 font-semibold">{selectedOrder.matricula_veiculo || 'N/D'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Temperatura Cais:</span>
+                  <span className="text-amber-700 font-semibold flex items-center gap-1">
+                    <Thermometer className="w-3.5 h-3.5 text-amber-600" />
+                    {selectedOrder.temperatura_veiculo_c ?? 18}°C
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Chegada:</span>
+                  <span className="text-slate-800 font-semibold">{selectedOrder.data_chegada || 'Em curso'}</span>
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500 shadow-sm">
-              Selecione uma guia na lista à esquerda para conferir e receber artigos.
-            </div>
-          )}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-slate-200 p-12 text-center text-slate-500 shadow-sm">
+            Selecione uma guia na lista à esquerda para conferir e receber artigos.
+          </div>
+        )}
 
         {/* Column 3: Product Lines */}
         {selectedOrder && (
