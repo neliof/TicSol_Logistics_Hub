@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ReceivingOrder, PalletSSCC, RuleConfig } from '../types/wms';
 import { generateSSCC, buildGS1128String, formatToGS1Date } from '../utils/gs1';
 import { GS1LabelPrintModal } from './GS1LabelPrintModal';
+import { useSeriesConfig } from '../hooks/useSeriesConfig';
 import {
   Boxes,
   Layers,
@@ -26,7 +27,7 @@ interface PaletizacaoModuleProps {
   selectedTenant: string;
   onPalletCreated: (pallet: PalletSSCC, orderId: string, lineId: string, boxesAdded: number) => void;
   preSelectedOrderAndLine?: { orderId: string; lineId: string } | null;
-  onSyncDocuments?: (dataInicio?: string, dataFim?: string) => Promise<void>;
+  onSyncDocuments?: (dataInicio?: string, dataFim?: string, series?: string[]) => Promise<void>;
 }
 
 export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
@@ -38,29 +39,7 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
   preSelectedOrderAndLine,
   onSyncDocuments
 }) => {
-  // Sync modal state
-  const [showSyncModal, setShowSyncModal] = useState(false);
-  const [syncDataInicio, setSyncDataInicio] = useState('');
-  const [syncDataFim, setSyncDataFim] = useState('');
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-
-  const handleSync = async () => {
-    if (!onSyncDocuments) return;
-    setSyncLoading(true);
-    try {
-      await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined);
-      setShowSyncModal(false);
-      setSyncDataInicio('');
-      setSyncDataFim('');
-      setSyncMessage('Documentos sincronizados!');
-      setTimeout(() => setSyncMessage(null), 4000);
-    } catch (err) {
-      setSyncMessage(`Erro: ${err instanceof Error ? err.message : 'erro desconhecido'}`);
-    } finally {
-      setSyncLoading(false);
-    }
-  };
+  const { receção: seriesReceção } = useSeriesConfig('receção');
 
   // Find order and line
   const [selectedOrderId, setSelectedOrderId] = useState<string>(
@@ -77,42 +56,18 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
 
   // Active Client Stacking Rule (Default to Sonae MC if tenant is Sonae MC)
   const activeRuleCode = selectedTenant.includes('Sonae') ? 'SONAE_MC' : 'SOVENA';
-  const defaultRule: RuleConfig = {
-    cliente_id: 'DEFAULT',
-    cliente_nome: 'Regra Padrão',
-    altura_maxima_cm: 200,
-    peso_maximo_kg: 1500,
-    vida_util_minima_porcentagem: 70,
-    permitir_palete_mista: true,
-    tipo_palete: 'EURO_120x80',
-    obriga_sscc_gs1128: true,
-    etiqueta_formato: 'A5_105x148mm',
-    regras_empilhamento: 'Sem restrições'
-  };
-  const activeRule = ruleConfigs.find(r => r.cliente_id === activeRuleCode) || ruleConfigs[0] || defaultRule;
-
-  // Guard: ensure activeRule always exists
-  if (!activeRule) {
-    return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-slate-900">Erro ao carregar regras</h3>
-              <p className="text-sm text-slate-600 mt-1">Sistema não conseguiu inicializar regras de paletização.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const activeRule = ruleConfigs.find(r => r.cliente_id === activeRuleCode) || ruleConfigs[0];
 
   // Calculated Pallet Inputs
   const [caixasPorCamada, setCaixasPorCamada] = useState<number>(10);
   const [numCamadas, setNumCamadas] = useState<number>(4);
   const [activePrintPallet, setActivePrintPallet] = useState<PalletSSCC | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncDataInicio, setSyncDataInicio] = useState('');
+  const [syncDataFim, setSyncDataFim] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Address pending item #3: Calculate remaining boxes available for palletization
   const caixasRecebidasTotal = activeLine ? activeLine.qtd_recebida_caixas : 0;
@@ -211,10 +166,33 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
     };
 
     onPalletCreated(newPallet, selectedOrder.id, activeLine.id, caixasNaPaleteProposta);
-    
+
     setToastMsg(`Palete SSCC ${ssccFull} criada e materializada em Staging! (RPC fn_criar_palete_sscc ok)`);
     setTimeout(() => setToastMsg(null), 4000);
     setActivePrintPallet(newPallet);
+  };
+
+  const handleSync = async () => {
+    setSyncLoading(true);
+    console.log('[PaletizacaoModule] Iniciando sync', { seriesReceção, syncDataInicio, syncDataFim, onSyncDocumentsDef: typeof onSyncDocuments });
+    try {
+      if (!onSyncDocuments) {
+        throw new Error('onSyncDocuments callback não definido');
+      }
+      await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined, seriesReceção);
+      setSyncMessage(`✓ Receções de ${seriesReceção.join(', ')} sincronizadas!`);
+      setShowSyncModal(false);
+      setSyncDataInicio('');
+      setSyncDataFim('');
+      setTimeout(() => setSyncMessage(null), 4000);
+    } catch (err) {
+      console.error('[PaletizacaoModule] Sync error:', err);
+      const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
+      setSyncMessage(`✗ ${msg}`);
+      setTimeout(() => setSyncMessage(null), 4000);
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   return (
@@ -250,10 +228,11 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowSyncModal(true)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+            disabled={syncLoading}
+            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
           >
             <Calendar className="w-4 h-4" />
-            Sincronizar
+            {syncLoading ? 'A sincronizar…' : 'Sincronizar'}
           </button>
           <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-mono text-blue-700">
             <ShieldCheck className="w-4 h-4 text-blue-600" />
@@ -291,7 +270,7 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
                 >
                   {orders.map(o => (
                     <option key={o.id} value={o.id}>
-                      {o.nome_documento || `${o.serie || ''}${o.numero_guia}`}
+                      {o.numero_guia} - {o.fornecedor_nome}
                     </option>
                   ))}
                 </select>
@@ -535,7 +514,7 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
               Sincronizar Documentos
             </h3>
             <p className="text-sm text-slate-600 mb-6">
-              Sincroniza guias de receção configuradas com intervalo de datas (opcional).
+              Sincroniza receções configuradas {seriesReceção.length > 0 ? `(séries: ${seriesReceção.join(', ')})` : '(sem séries configuradas)'} com intervalo de datas (opcional).
             </p>
             <div className="space-y-4 mb-6">
               <div>

@@ -101,6 +101,14 @@ export default function SeriesConfig() {
     seriesPorTipo[s.typeName].push(s);
   }
 
+  // Filtrar séries por tipo para cada módulo
+  const seriesReceção = series.filter(s =>
+    s.type === 'Entrada' || s.type === 'Encomenda_Fornecedor'
+  );
+  const seriesExpedicao = series.filter(s =>
+    s.type === 'Venda' || s.type === 'Saida' || s.type === 'Encomenda_Cliente'
+  );
+
   return (
     <div className="series-config">
       <h2>Configuração de Séries de Documentos</h2>
@@ -111,35 +119,45 @@ export default function SeriesConfig() {
       <div className="series-grid">
         <div className="modulo-receção">
           <h3>Receção</h3>
+          <p className="descricao-modulo">Séries de Entrada (Exxx) e Encomendas de Fornecedores (Fxxx)</p>
           <div className="lista-series">
-            {series.map((s) => (
-              <label key={`rec-${s.code}`} className="checkbox-serie">
-                <input
-                  type="checkbox"
-                  checked={receçãoSelecionadas.has(s.code)}
-                  onChange={() => alternarReceção(s.code)}
-                />
-                <span className="codigo">{s.code}</span>
-                <span className="nome">{s.docNome || s.typeName}</span>
-              </label>
-            ))}
+            {seriesReceção.length > 0 ? (
+              seriesReceção.map((s) => (
+                <label key={`rec-${s.code}`} className="checkbox-serie">
+                  <input
+                    type="checkbox"
+                    checked={receçãoSelecionadas.has(s.code)}
+                    onChange={() => alternarReceção(s.code)}
+                  />
+                  <span className="codigo">{s.code}</span>
+                  <span className="nome">{s.typeName}</span>
+                </label>
+              ))
+            ) : (
+              <p className="sem-series">Nenhuma série de Receção configurada</p>
+            )}
           </div>
         </div>
 
         <div className="modulo-expedição">
           <h3>Expedição</h3>
+          <p className="descricao-modulo">Séries de Vendas (Vxxx), Saídas (Sxxx) e Encomendas de Clientes (Cxxx)</p>
           <div className="lista-series">
-            {series.map((s) => (
-              <label key={`exp-${s.code}`} className="checkbox-serie">
-                <input
-                  type="checkbox"
-                  checked={expediçãoSelecionadas.has(s.code)}
-                  onChange={() => alternarExpedição(s.code)}
-                />
-                <span className="codigo">{s.code}</span>
-                <span className="nome">{s.docNome || s.typeName}</span>
-              </label>
-            ))}
+            {seriesExpedicao.length > 0 ? (
+              seriesExpedicao.map((s) => (
+                <label key={`exp-${s.code}`} className="checkbox-serie">
+                  <input
+                    type="checkbox"
+                    checked={expediçãoSelecionadas.has(s.code)}
+                    onChange={() => alternarExpedição(s.code)}
+                  />
+                  <span className="codigo">{s.code}</span>
+                  <span className="nome">{s.typeName}</span>
+                </label>
+              ))
+            ) : (
+              <p className="sem-series">Nenhuma série de Expedição configurada</p>
+            )}
           </div>
         </div>
       </div>

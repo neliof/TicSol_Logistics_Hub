@@ -24,6 +24,7 @@ interface ExpedicaoModuleProps {
   onConfirmGuia: (guiaId: string) => void;
   onCreateEmbarque: (comprovante: ComprovanteEmbarque) => void;
   onSelectGuia?: (guiaId: string) => void;
+  onSyncDocuments?: (dataInicio?: string, dataFim?: string, series?: string[]) => Promise<void>;
 }
 
 export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
@@ -32,9 +33,10 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   comprovantes,
   onConfirmGuia,
   onCreateEmbarque,
-  onSelectGuia
+  onSelectGuia,
+  onSyncDocuments
 }) => {
-  const { expedição: seriesExpedicao } = useSeriesConfig('EXPEDICAO');
+  const { expedição: seriesExpedicao } = useSeriesConfig('expedição');
 
   const [selectedGuiaId, setSelectedGuiaId] = useState<string>(guias[0]?.id || '');
   const [showEmbarqueForm, setShowEmbarqueForm] = useState(false);
@@ -57,14 +59,19 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
 
   const handleSync = async () => {
     setSyncLoading(true);
+    console.log('[ExpedicaoModule] Iniciando sync', { seriesExpedicao, syncDataInicio, syncDataFim, onSyncDocumentsDef: typeof onSyncDocuments });
     try {
-      await api.sincronizarGuias(syncDataInicio || undefined, syncDataFim || undefined, seriesExpedicao);
+      if (!onSyncDocuments) {
+        throw new Error('onSyncDocuments callback não definido');
+      }
+      await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined, seriesExpedicao);
       setSyncMessage(`✓ Guias de ${seriesExpedicao.join(', ')} sincronizadas!`);
       setShowSyncModal(false);
       setSyncDataInicio('');
       setSyncDataFim('');
       setTimeout(() => setSyncMessage(null), 4000);
     } catch (err) {
+      console.error('[ExpedicaoModule] Sync error:', err);
       const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
       setSyncMessage(`✗ ${msg}`);
       setTimeout(() => setSyncMessage(null), 4000);
@@ -101,7 +108,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
       hora_saida: new Date().toLocaleTimeString('pt-PT'),
       data_saida: new Date().toISOString().slice(0, 10),
       operador_embarque: 'Op. Expedição #60',
-      observacoes: `Guia ${selectedGuia.nome_documento || selectedGuia.numero_guia}`,
+      observacoes: `Guia ${selectedGuia.numero_guia} - Cliente: ${selectedGuia.cliente_nome}`,
       status: 'EMBARQUE_CONFIRMADO'
     };
 
@@ -170,7 +177,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
                 }`}
               >
                 <div className="flex items-start justify-between mb-1">
-                  <span className="font-mono font-bold text-xs text-slate-900">{guia.nome_documento || guia.numero_guia}</span>
+                  <span className="font-mono font-bold text-xs text-slate-900">{guia.numero_guia}</span>
                   <span
                     className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
                       guia.status === 'RECEBIDA'
@@ -202,7 +209,7 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-600">Guia:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedGuia.nome_documento || selectedGuia.numero_guia}</span>
+                  <span className="font-mono font-bold text-slate-900">{selectedGuia.numero_guia}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Cliente:</span>

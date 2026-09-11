@@ -4,7 +4,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_LOCATIONS
 } from './data/mockData';
-import { lerSessao, terminarSessao, Utilizador } from './api';
+import { lerSessao, terminarSessao, Utilizador, api } from './api';
 import { useRegras } from './hooks/useRegras';
 import { useSeriesConfig } from './hooks/useSeriesConfig';
 import { Navbar } from './components/Navbar';
@@ -240,6 +240,27 @@ function AppAutenticada({
     setAuditLogs(prev => [log, ...prev]);
   };
 
+  // Handler: Sync documents (Receção/Paletização/Expedição)
+  const handleSyncDocuments = async (dataInicio?: string, dataFim?: string, series?: string[]) => {
+    console.log('[App] handleSyncDocuments called', { activeTab, dataInicio, dataFim, series });
+    try {
+      console.log('[App] Calling api.sincronizarGuias...');
+      const result = await api.sincronizarGuias(dataInicio, dataFim, series);
+      console.log('[App] Sync result:', result);
+      // Reload documents after sync
+      if (activeTab === 'rececao') {
+        console.log('[App] Reloading receção orders');
+        setOrders([...orders]); // Trigger reload via hook
+      } else if (activeTab === 'paletizacao' || activeTab === 'paletizacao_expedicao' || activeTab === 'expedicao') {
+        console.log('[App] Reloading expedição guias');
+        setGuiasEntrada([...guiasEntrada]); // Trigger reload via hook
+      }
+    } catch (err) {
+      console.error('[App] Sync failed:', err);
+      throw err;
+    }
+  };
+
   // Filter documents by active module's configured series
   const getFilteredGuias = () => {
     // Determine which config to use based on active tab
@@ -353,6 +374,7 @@ function AppAutenticada({
             onOpenScanner={() => setIsScannerOpen(true)}
             scannedCode={scannedCode}
             clearScannedCode={() => setScannedCode(null)}
+            onSyncDocuments={handleSyncDocuments}
           />
         )}
 
@@ -366,6 +388,7 @@ function AppAutenticada({
               selectedTenant={selectedTenant}
               onPalletCreated={handlePalletCreated}
               preSelectedOrderAndLine={preSelectedOrderAndLine}
+              onSyncDocuments={handleSyncDocuments}
             />
           </ErrorBoundary>
         )}
@@ -400,6 +423,7 @@ function AppAutenticada({
             onConfirmGuia={handleConfirmGuiaPaletizacao}
             onCreateEmbarque={handleCreateEmbarque}
             onSelectGuia={carregarLinhas}
+            onSyncDocuments={handleSyncDocuments}
           />
         )}
 
