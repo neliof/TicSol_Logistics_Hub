@@ -1,4 +1,143 @@
-# Endpoints do WebServer ArtSoft
+# API Endpoints — TicSol Logistics Hub
+
+**⚠️ STATUS**: Este documento foi atualizado na auditoria de 2026-09-12.
+
+## ⚡ IMPORTANTE: Dois Tipos de Documentação
+
+### 1. ENDPOINTS REAIS (Implementados e Ativos) ✅
+
+Projeto usa **21 endpoints próprios** (Node.js + Express).
+Veja **Secção: API Endpoints Reais (Ativos)**
+
+### 2. ENDPOINTS ARTSOFT XML (Referência Histórica) 📚
+
+**301 endpoints** documentados de WebServer ArtSoft.
+Não são usados no código atual.
+Mantidos como referência para compreensão da arquitetura.
+Veja **Secção: Endpoints do WebServer ArtSoft (Histórico)**
+
+---
+
+## API Endpoints Reais (Ativos) ✅
+
+### Base URL
+```
+http://localhost:3000
+```
+
+### Authentication
+```bash
+# Login
+POST /auth/login
+Content-Type: application/json
+
+{
+  "usuario": "usuario@empresa.com",
+  "senha": "password"
+}
+
+# Response: 200 OK
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "usuario": { "id": "...", "nome": "..." }
+}
+
+# Header para requisições autenticadas:
+Authorization: Bearer {token}
+```
+
+### Endpoints Ativos
+
+#### Health Check
+```
+GET /health
+```
+
+#### PostgreSQL REST (PostgREST)
+```
+GET     /rest/v1/{table}
+POST    /rest/v1/{table}
+PUT     /rest/v1/{table}?id=eq.{id}
+DELETE  /rest/v1/{table}?id=eq.{id}
+
+# Exemplos:
+GET    /rest/v1/guia_recepcao
+GET    /rest/v1/palete_sscc?id=eq.abc123
+POST   /rest/v1/palete_sscc
+```
+
+#### PostgreSQL RPC (Stored Procedures)
+```
+POST /rpc/{function_name}
+Content-Type: application/json
+
+# Exemplos:
+POST /rpc/calcular_paletizacao
+POST /rpc/gerar_sscc
+POST /rpc/regra_logistica
+POST /rpc/encomenda
+```
+
+#### ARTSOFT Sincronização
+```
+POST /api/artsoft/guias/sync              # Sincronizar guias receção
+POST /api/artsoft/produtos/sync           # Sincronizar produtos
+POST /api/artsoft/terceiros/sync          # Sincronizar fornecedores
+POST /api/artsoft/stock/sync              # Sincronizar stock
+
+GET  /api/artsoft/config                  # Obter configuração
+POST /api/artsoft/config                  # Guardar configuração
+
+GET  /api/artsoft/series/discover         # Descobrir series
+GET  /api/artsoft/series/config/:modulo   # Get series config
+POST /api/artsoft/series/config           # Save series config
+POST /api/artsoft/series/save             # Save series
+
+# Test data endpoints (dev apenas)
+GET    /api/artsoft/test-data/contagem
+DELETE /api/artsoft/test-data
+```
+
+#### Documentação (Swagger)
+```
+GET /api-docs
+```
+
+### Total Endpoints Ativos
+**21 rotas** (5 categorias)
+
+---
+
+## Arquitetura: Porquê Não Usar Endpoints ARTSOFT XML?
+
+Projeto escolheu:
+- ✅ **PostgreSQL** como camada de persistência
+- ✅ **PostgREST** como API genérica (CRUD automático)
+- ✅ **Conectores abstratos** para sincronização com ARTSOFT
+
+### Conectores Ativos
+```
+artsoft-sync/connectors/
+├─ rest.js      → REST API (192.168.1.120:4219)
+├─ odbc.js      → ODBC direto com ARTSOFT BD
+└─ file.js      → Ficheiros CSV/Excel
+```
+
+### Consequência
+- ❌ Endpoints ARTSOFT XML (301) **não são usados**
+- ❌ Protocolo digest-auth **não implementado**
+- ❌ XMLQuery/XMLReports **não usados**
+
+### Vantagens desta Arquitetura
+- Abstração: trocar conector sem mudar frontend
+- Performance: PostgreSQL local é mais rápido
+- Portabilidade: funciona sem ARTSOFT se necessário
+
+---
+
+## Endpoints do WebServer ArtSoft (Histórico) 📚
+
+**STATUS**: Referência histórica. Não usados no código atual.
 
 Fonte inicial: `BRAVAPLAN-XML-N.log`, capturado em 2026-09-11.
 
