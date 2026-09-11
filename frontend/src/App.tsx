@@ -21,8 +21,10 @@ import SeriesConfig from './components/SeriesConfig';
 import ArtsoftConfig from './components/ArtsoftConfig';
 import GestaoDadosModule from './components/GestaoDadosModule';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastContainer } from './components/Toast';
 import { useWMSData } from './hooks/useWMSData';
 import { useExpedicaoData } from './hooks/useExpedicaoData';
+import { useToast } from './hooks/useToast';
 import { GuiaTransporte, PaletaExpedicao, ChecklistExpedicao, ComprovanteEmbarque } from './types/expedicao';
 
 export default function App() {
