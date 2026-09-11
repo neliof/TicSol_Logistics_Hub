@@ -97,7 +97,7 @@ function docParaGuia(d: any): GuiaTransporte {
   const serie = d.origem_serie || '';
   const tipoDescricao = TIPO_DOCUMENTO_MAP[serie] || d.tipo || 'Documento';
   const clienteNome = x.terceiro_nome || '';
-  const nome_documento = clienteNome ? `${tipoDescricao} - ${clienteNome}` : tipoDescricao;
+  const nome_documento = `${d.origem_doc_id || (serie + '-' + d.numero)} - ${tipoDescricao}`;
 
   return {
     id: d.id,
