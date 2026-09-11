@@ -28,6 +28,7 @@ interface RececaoModuleProps {
   scannedCode: string | null;
   clearScannedCode: () => void;
   onSyncDocuments?: (dataInicio?: string, dataFim?: string, series?: string[]) => Promise<void>;
+  isSyncLoading?: boolean;
 }
 
 export const RececaoModule: React.FC<RececaoModuleProps> = ({
@@ -37,7 +38,8 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
   onOpenScanner,
   scannedCode,
   clearScannedCode,
-  onSyncDocuments
+  onSyncDocuments,
+  isSyncLoading = false
 }) => {
   const { receção: seriesReceção } = useSeriesConfig('receção');
 
@@ -48,8 +50,6 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncDataInicio, setSyncDataInicio] = useState('');
   const [syncDataFim, setSyncDataFim] = useState('');
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const selectedOrder = orders.find(o => o.id === selectedOrderId) || orders[0];
 
@@ -112,25 +112,17 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
   };
 
   const handleSync = async () => {
-    setSyncLoading(true);
     console.log('[RececaoModule] Iniciando sync', { seriesReceção, syncDataInicio, syncDataFim, onSyncDocumentsDef: typeof onSyncDocuments });
     try {
       if (!onSyncDocuments) {
         throw new Error('onSyncDocuments callback não definido');
       }
       await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined, seriesReceção);
-      setSyncMessage(`✓ Receções de ${seriesReceção.join(', ')} sincronizadas!`);
       setShowSyncModal(false);
       setSyncDataInicio('');
       setSyncDataFim('');
-      setTimeout(() => setSyncMessage(null), 4000);
     } catch (err) {
       console.error('[RececaoModule] Sync error:', err);
-      const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
-      setSyncMessage(`✗ ${msg}`);
-      setTimeout(() => setSyncMessage(null), 4000);
-    } finally {
-      setSyncLoading(false);
     }
   };
 
@@ -156,10 +148,10 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowSyncModal(true)}
-              disabled={syncLoading}
+              disabled={isSyncLoading}
               className="px-3 py-1.5 bg-white text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-all"
             >
-              {syncLoading ? 'A sincronizar…' : 'Sincronizar Documentos'}
+              {isSyncLoading ? 'A sincronizar…' : 'Sincronizar Documentos'}
             </button>
             <button
               onClick={onOpenScanner}
@@ -412,13 +404,6 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
         )}
       </div>
 
-      {/* Sync Message Notification */}
-      {syncMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-blue-500 text-white font-bold px-4 py-3 rounded-lg shadow-xl border border-blue-400 animate-pulse">
-          {syncMessage}
-        </div>
-      )}
-
       {/* Sync Modal */}
       {showSyncModal && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center">
@@ -457,17 +442,17 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowSyncModal(false)}
-                disabled={syncLoading}
+                disabled={isSyncLoading}
                 className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSync}
-                disabled={syncLoading}
+                disabled={isSyncLoading}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {syncLoading ? (
+                {isSyncLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Sincronizando...

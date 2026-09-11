@@ -25,6 +25,7 @@ interface ExpedicaoModuleProps {
   onCreateEmbarque: (comprovante: ComprovanteEmbarque) => void;
   onSelectGuia?: (guiaId: string) => void;
   onSyncDocuments?: (dataInicio?: string, dataFim?: string, series?: string[]) => Promise<void>;
+  isSyncLoading?: boolean;
 }
 
 export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
@@ -34,7 +35,8 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   onConfirmGuia,
   onCreateEmbarque,
   onSelectGuia,
-  onSyncDocuments
+  onSyncDocuments,
+  isSyncLoading = false
 }) => {
   const { expedição: seriesExpedicao } = useSeriesConfig('expedição');
 
@@ -44,8 +46,6 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncDataInicio, setSyncDataInicio] = useState('');
   const [syncDataFim, setSyncDataFim] = useState('');
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const selectedGuia = guias.find(g => g.id === selectedGuiaId) || guias[0];
 
@@ -58,25 +58,17 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
   const filteredGuias = statusFilter === 'TODOS' ? guias : guias.filter(g => g.status === statusFilter);
 
   const handleSync = async () => {
-    setSyncLoading(true);
     console.log('[ExpedicaoModule] Iniciando sync', { seriesExpedicao, syncDataInicio, syncDataFim, onSyncDocumentsDef: typeof onSyncDocuments });
     try {
       if (!onSyncDocuments) {
         throw new Error('onSyncDocuments callback não definido');
       }
       await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined, seriesExpedicao);
-      setSyncMessage(`✓ Guias de ${seriesExpedicao.join(', ')} sincronizadas!`);
       setShowSyncModal(false);
       setSyncDataInicio('');
       setSyncDataFim('');
-      setTimeout(() => setSyncMessage(null), 4000);
     } catch (err) {
       console.error('[ExpedicaoModule] Sync error:', err);
-      const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
-      setSyncMessage(`✗ ${msg}`);
-      setTimeout(() => setSyncMessage(null), 4000);
-    } finally {
-      setSyncLoading(false);
     }
   };
 
@@ -127,10 +119,10 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
           </div>
           <button
             onClick={() => setShowSyncModal(true)}
-            disabled={syncLoading}
+            disabled={isSyncLoading}
             className="px-3 py-1.5 bg-white text-blue-600 font-semibold text-sm rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-all"
           >
-            {syncLoading ? 'A sincronizar…' : 'Sincronizar Documentos'}
+            {isSyncLoading ? 'A sincronizar…' : 'Sincronizar Documentos'}
           </button>
         </div>
         <p className="text-blue-100">Paletização + Embarque para Sonae MC, Nívea, Tesa, Tena, etc</p>
@@ -368,13 +360,6 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
         </div>
       )}
 
-      {/* Sync Message Notification */}
-      {syncMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-blue-500 text-white font-bold px-4 py-3 rounded-lg shadow-xl border border-blue-400 animate-pulse">
-          {syncMessage}
-        </div>
-      )}
-
       {/* Sync Modal */}
       {showSyncModal && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center">
@@ -413,17 +398,17 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowSyncModal(false)}
-                disabled={syncLoading}
+                disabled={isSyncLoading}
                 className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSync}
-                disabled={syncLoading}
+                disabled={isSyncLoading}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {syncLoading ? (
+                {isSyncLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Sincronizando...

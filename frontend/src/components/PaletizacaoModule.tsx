@@ -28,6 +28,7 @@ interface PaletizacaoModuleProps {
   onPalletCreated: (pallet: PalletSSCC, orderId: string, lineId: string, boxesAdded: number) => void;
   preSelectedOrderAndLine?: { orderId: string; lineId: string } | null;
   onSyncDocuments?: (dataInicio?: string, dataFim?: string, series?: string[]) => Promise<void>;
+  isSyncLoading?: boolean;
 }
 
 export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
@@ -37,7 +38,8 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
   selectedTenant,
   onPalletCreated,
   preSelectedOrderAndLine,
-  onSyncDocuments
+  onSyncDocuments,
+  isSyncLoading = false
 }) => {
   const { receção: seriesReceção } = useSeriesConfig('receção');
 
@@ -66,8 +68,6 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncDataInicio, setSyncDataInicio] = useState('');
   const [syncDataFim, setSyncDataFim] = useState('');
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Address pending item #3: Calculate remaining boxes available for palletization
   const caixasRecebidasTotal = activeLine ? activeLine.qtd_recebida_caixas : 0;
@@ -173,25 +173,17 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
   };
 
   const handleSync = async () => {
-    setSyncLoading(true);
     console.log('[PaletizacaoModule] Iniciando sync', { seriesReceção, syncDataInicio, syncDataFim, onSyncDocumentsDef: typeof onSyncDocuments });
     try {
       if (!onSyncDocuments) {
         throw new Error('onSyncDocuments callback não definido');
       }
       await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined, seriesReceção);
-      setSyncMessage(`✓ Receções de ${seriesReceção.join(', ')} sincronizadas!`);
       setShowSyncModal(false);
       setSyncDataInicio('');
       setSyncDataFim('');
-      setTimeout(() => setSyncMessage(null), 4000);
     } catch (err) {
       console.error('[PaletizacaoModule] Sync error:', err);
-      const msg = err instanceof Error ? err.message : 'Falha ao sincronizar';
-      setSyncMessage(`✗ ${msg}`);
-      setTimeout(() => setSyncMessage(null), 4000);
-    } finally {
-      setSyncLoading(false);
     }
   };
 
@@ -228,11 +220,11 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowSyncModal(true)}
-            disabled={syncLoading}
+            disabled={isSyncLoading}
             className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
           >
             <Calendar className="w-4 h-4" />
-            {syncLoading ? 'A sincronizar…' : 'Sincronizar'}
+            {isSyncLoading ? 'A sincronizar…' : 'Sincronizar'}
           </button>
           <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-mono text-blue-700">
             <ShieldCheck className="w-4 h-4 text-blue-600" />
@@ -461,13 +453,6 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
         </div>
       </div>
 
-      {/* Sync Message Notification */}
-      {syncMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-blue-500 text-white font-bold px-4 py-3 rounded-lg shadow-xl border border-blue-400 animate-pulse">
-          {syncMessage}
-        </div>
-      )}
-
       {/* Sync Modal */}
       {showSyncModal && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center">
@@ -506,17 +491,17 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowSyncModal(false)}
-                disabled={syncLoading}
+                disabled={isSyncLoading}
                 className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSync}
-                disabled={syncLoading}
+                disabled={isSyncLoading}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {syncLoading ? (
+                {isSyncLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Sincronizando...
