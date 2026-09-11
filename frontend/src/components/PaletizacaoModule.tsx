@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ReceivingOrder, PalletSSCC, RuleConfig } from '../types/wms';
 import { generateSSCC, buildGS1128String, formatToGS1Date } from '../utils/gs1';
 import { GS1LabelPrintModal } from './GS1LabelPrintModal';
+import { OrderSelectorPanel } from './recepcao/OrderSelectorPanel';
 import { useSeriesConfig } from '../hooks/useSeriesConfig';
 import {
   Boxes,
@@ -15,7 +16,6 @@ import {
   ShieldCheck,
   Plus,
   Sparkles,
-  ArrowRight,
   Database,
   Calendar
 } from 'lucide-react';
@@ -248,50 +248,13 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
             
-            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-200 pb-3">
-              <Tag className="w-4 h-4 text-blue-600" />
-              1. Selecionar Guia e Linha de Encomenda
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              {/* Order Select */}
-              <div>
-                <label className="text-slate-600 block mb-1 font-medium">Guia de Receção / Encomenda</label>
-                <select
-                  value={selectedOrderId}
-                  onChange={(e) => {
-                    setSelectedOrderId(e.target.value);
-                    const ord = orders.find(o => o.id === e.target.value);
-                    if (ord && ord.linhas.length > 0) {
-                      setSelectedLineId(ord.linhas[0].id);
-                    }
-                  }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono text-slate-800 focus:outline-none focus:border-blue-500"
-                >
-                  {orders.map(o => (
-                    <option key={o.id} value={o.id}>
-                      {o.numero_guia} - {o.fornecedor_nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Line Select */}
-              <div>
-                <label className="text-slate-600 block mb-1 font-medium">Artigo a Paletizar</label>
-                <select
-                  value={selectedLineId}
-                  onChange={(e) => setSelectedLineId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono text-blue-700 font-bold focus:outline-none focus:border-blue-500"
-                >
-                  {selectedOrder?.linhas.map(l => (
-                    <option key={l.id} value={l.id}>
-                      {l.artigo_codigo} - {(l.artigo_descricao || '').slice(0, 30)}...
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <OrderSelectorPanel
+              orders={orders}
+              selectedOrderId={selectedOrderId}
+              selectedLineId={selectedLineId}
+              onSelectOrder={setSelectedOrderId}
+              onSelectLine={setSelectedLineId}
+            />
 
             {/* Line Summary Box with Pending Item #3 Reconciliation Notice */}
             {activeLine && (
