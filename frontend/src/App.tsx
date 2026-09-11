@@ -89,6 +89,9 @@ function AppAutenticada({
     lineId: string;
   } | null>(null);
 
+  // Loading states for async operations
+  const [isSyncLoading, setIsSyncLoading] = useState(false);
+
   // Handler: Navigate directly from Receção to Paletização
   const handleNavigateToPaletizacao = (guiaId: string, lineId: string) => {
     setPreSelectedOrderAndLine({ orderId: guiaId, lineId });
@@ -252,6 +255,7 @@ function AppAutenticada({
   // Handler: Sync documents (Receção/Paletização/Expedição)
   const handleSyncDocuments = async (dataInicio?: string, dataFim?: string, series?: string[]) => {
     console.log('[App] handleSyncDocuments called', { activeTab, dataInicio, dataFim, series });
+    setIsSyncLoading(true);
     try {
       console.log('[App] Calling api.sincronizarGuias...');
       const result = await api.sincronizarGuias(dataInicio, dataFim, series);
@@ -269,6 +273,8 @@ function AppAutenticada({
       console.error('[App] Sync failed:', err);
       showError(`Erro ao sincronizar: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
       throw err;
+    } finally {
+      setIsSyncLoading(false);
     }
   };
 
@@ -386,6 +392,7 @@ function AppAutenticada({
             scannedCode={scannedCode}
             clearScannedCode={() => setScannedCode(null)}
             onSyncDocuments={handleSyncDocuments}
+            isSyncLoading={isSyncLoading}
           />
         )}
 
@@ -400,6 +407,7 @@ function AppAutenticada({
               onPalletCreated={handlePalletCreated}
               preSelectedOrderAndLine={preSelectedOrderAndLine}
               onSyncDocuments={handleSyncDocuments}
+              isSyncLoading={isSyncLoading}
             />
           </ErrorBoundary>
         )}
@@ -435,6 +443,7 @@ function AppAutenticada({
             onCreateEmbarque={handleCreateEmbarque}
             onSelectGuia={carregarLinhas}
             onSyncDocuments={handleSyncDocuments}
+            isSyncLoading={isSyncLoading}
           />
         )}
 
