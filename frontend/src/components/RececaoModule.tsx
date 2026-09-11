@@ -291,158 +291,128 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Receiving Lines Table */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-sm text-slate-900 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    Linhas de Mercadoria a Conferir
-                  </h4>
-                  <span className="text-xs text-slate-500 font-mono">
-                    {selectedOrder.linhas.length} artigo(s)
-                  </span>
-                </div>
-
-                <div className="space-y-4">
-                  {selectedOrder.linhas.map((line) => {
-                    const remainingToPalletize = line.qtd_recebida_caixas - line.qtd_ja_paletizada_caixas;
-
-                    return (
-                      <div
-                        key={line.id}
-                        className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4"
-                      >
-                        {/* Line Header */}
-                        <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs text-blue-600 font-bold">{line.artigo_codigo}</span>
-                              <span className="text-xs font-mono text-slate-500">EAN: {line.ean_barcode}</span>
-                            </div>
-                            <h5 className="font-bold text-sm text-slate-900 mt-0.5">{line.artigo_descricao}</h5>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-600 font-mono bg-white px-2.5 py-1 rounded border border-slate-200 shadow-xs">
-                              Sugestão: <strong className="text-blue-600">{line.localizacao_sugerida}</strong>
-                            </span>
-                            
-                            {/* Palletize Direct Action */}
-                            <button
-                              onClick={() => onNavigateToPaletizacao(selectedOrder.id, line.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-md shadow-xs transition-colors"
-                              title="Ir para o Ecrã de Paletização com este artigo"
-                            >
-                              <Boxes className="w-3.5 h-3.5" />
-                              Paletizar ({remainingToPalletize} Cx)
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Input Fields Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
-                          {/* Qtd Esperada */}
-                          <div>
-                            <label className="text-[11px] text-slate-500 block mb-1">Esperado (Cx)</label>
-                            <input
-                              type="number"
-                              disabled
-                              value={line.qtd_esperada_caixas}
-                              className="w-full bg-slate-200/60 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-slate-600"
-                            />
-                          </div>
-
-                          {/* Qtd Recebida (Editable) */}
-                          <div>
-                            <label className="text-[11px] text-slate-700 font-semibold block mb-1">
-                              Recebido (Cx)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={line.qtd_recebida_caixas}
-                              onChange={(e) =>
-                                handleUpdateLine(line.id, {
-                                  qtd_recebida_caixas: parseInt(e.target.value, 10) || 0
-                                })
-                              }
-                              className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2.5 py-1.5 font-mono text-blue-700 font-bold focus:outline-none shadow-xs"
-                            />
-                          </div>
-
-                          {/* Lote */}
-                          <div>
-                            <label className="text-[11px] text-slate-700 block mb-1">Lote Fornecedor</label>
-                            <input
-                              type="text"
-                              value={line.lote || ''}
-                              onChange={(e) =>
-                                handleUpdateLine(line.id, { lote: e.target.value })
-                              }
-                              placeholder="LOTE-..."
-                              className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2.5 py-1.5 font-mono text-slate-800 focus:outline-none shadow-xs"
-                            />
-                          </div>
-
-                          {/* Data Validade */}
-                          <div>
-                            <label className="text-[11px] text-slate-700 block mb-1">Data Validade</label>
-                            <input
-                              type="date"
-                              value={line.data_validade || ''}
-                              onChange={(e) =>
-                                handleUpdateLine(line.id, { data_validade: e.target.value })
-                              }
-                              className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2.5 py-1.5 font-mono text-slate-800 focus:outline-none shadow-xs"
-                            />
-                          </div>
-
-                          {/* Danificados */}
-                          <div>
-                            <label className="text-[11px] text-rose-600 font-medium block mb-1">Danificados (Cx)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={line.danificados_caixas}
-                              onChange={(e) =>
-                                handleUpdateLine(line.id, {
-                                  danificados_caixas: parseInt(e.target.value, 10) || 0
-                                })
-                              }
-                              className="w-full bg-white border border-slate-300 focus:border-rose-500 rounded px-2.5 py-1.5 font-mono text-rose-600 font-bold focus:outline-none shadow-xs"
-                            />
-                          </div>
-
-                          {/* Já Paletizado (Read-only) */}
-                          <div>
-                            <label className="text-[11px] text-emerald-700 font-medium block mb-1">Já Paletizado</label>
-                            <div className="w-full bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5 font-mono text-emerald-700 font-bold">
-                              {line.qtd_ja_paletizada_caixas} Cx
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Damage notes if any */}
-                        {line.danificados_caixas > 0 && (
-                          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                            <span>
-                              <strong>Anomalia Registada:</strong> {line.danificados_caixas} caixa(s) com avaria. Insira notas de não-conformidade no relatório.
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500 shadow-sm">
               Selecione uma guia na lista à esquerda para conferir e receber artigos.
             </div>
           )}
+
+        {/* Column 3: Product Lines */}
+        {selectedOrder && (
+          <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm overflow-hidden flex flex-col">
+            <h3 className="font-semibold text-sm text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
+              <FileText className="w-4 h-4 text-blue-600" />
+              Linhas ({selectedOrder.linhas.length})
+            </h3>
+
+            <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+              {selectedOrder.linhas.map((line) => {
+                const remainingToPalletize = line.qtd_recebida_caixas - line.qtd_ja_paletizada_caixas;
+
+                return (
+                  <div
+                    key={line.id}
+                    className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-xs text-blue-600 font-bold shrink-0">{line.artigo_codigo}</span>
+                          <span className="text-xs font-mono text-slate-500 truncate">EAN: {line.ean_barcode}</span>
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-900 line-clamp-2">{line.artigo_descricao}</h5>
+                      </div>
+                      <button
+                        onClick={() => onNavigateToPaletizacao(selectedOrder.id, line.id)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[10px] rounded-md whitespace-nowrap shrink-0"
+                      >
+                        <Boxes className="w-3 h-3" />
+                        Paletizar ({remainingToPalletize})
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <label className="text-slate-500 block mb-0.5">Esperado</label>
+                        <input
+                          type="number"
+                          disabled
+                          value={line.qtd_esperada_caixas}
+                          className="w-full bg-slate-200/60 border border-slate-300 rounded px-2 py-1 font-mono text-slate-600 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-700 font-semibold block mb-0.5">Recebido (Cx)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={line.qtd_recebida_caixas}
+                          onChange={(e) =>
+                            handleUpdateLine(line.id, {
+                              qtd_recebida_caixas: parseInt(e.target.value, 10) || 0
+                            })
+                          }
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1 font-mono text-blue-700 font-bold text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-700 block mb-0.5">Lote</label>
+                        <input
+                          type="text"
+                          value={line.lote || ''}
+                          onChange={(e) =>
+                            handleUpdateLine(line.id, { lote: e.target.value })
+                          }
+                          placeholder="LOTE"
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1 font-mono text-slate-800 text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-700 block mb-0.5">Validade</label>
+                        <input
+                          type="date"
+                          value={line.data_validade || ''}
+                          onChange={(e) =>
+                            handleUpdateLine(line.id, { data_validade: e.target.value })
+                          }
+                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1 font-mono text-slate-800 text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-rose-600 font-medium block mb-0.5">Danificados</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={line.danificados_caixas}
+                          onChange={(e) =>
+                            handleUpdateLine(line.id, {
+                              danificados_caixas: parseInt(e.target.value, 10) || 0
+                            })
+                          }
+                          className="w-full bg-white border border-slate-300 focus:border-rose-500 rounded px-2 py-1 font-mono text-rose-600 font-bold text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-emerald-700 font-medium block mb-0.5">Já Paletizado</label>
+                        <div className="w-full bg-emerald-50 border border-emerald-200 rounded px-2 py-1 font-mono text-emerald-700 font-bold text-xs">
+                          {line.qtd_ja_paletizada_caixas}
+                        </div>
+                      </div>
+                    </div>
+
+                    {line.danificados_caixas > 0 && (
+                      <div className="p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-800 flex items-center gap-2">
+                        <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                        <span><strong>Anomalia:</strong> {line.danificados_caixas} cx danificadas</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         </div>
       </div>
 
