@@ -4,22 +4,10 @@ import { PalletSSCC, RuleConfig } from '../types/wms';
 import { api } from '../api';
 import { generateSSCC, buildGS1128String, formatToGS1Date } from '../utils/gs1';
 import { GS1LabelPrintModal } from './GS1LabelPrintModal';
-import { BarcodeRenderer } from './BarcodeRenderer';
-import {
-  Boxes,
-  Layers,
-  Tag,
-  Scale,
-  Ruler,
-  CheckCircle2,
-  AlertTriangle,
-  Printer,
-  ShieldCheck,
-  Plus,
-  Sparkles,
-  ArrowRight,
-  Truck
-} from 'lucide-react';
+import { GuiaSelectorPanel } from './expedicao/GuiaSelectorPanel';
+import { PaletCalculator } from './expedicao/PaletCalculator';
+import { PaletVisualization } from './expedicao/PaletVisualization';
+import { Boxes, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface ExpedicaoPaletizacaoModuleProps {
   guias: GuiaTransporte[];
@@ -58,24 +46,6 @@ export const ExpedicaoPaletizacaoModule: React.FC<ExpedicaoPaletizacaoModuleProp
   const [syncDataFim, setSyncDataFim] = useState('');
   const [syncLoading, setSyncLoading] = useState(false);
 
-  // Filtro e ordenação
-  const [filterText, setFilterText] = useState('');
-  const [sortBy, setSortBy] = useState<'numero' | 'cliente' | 'data'>('numero');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-
-  // Aplicar filtro e ordenação
-  const guiasFiltered = guias.filter(g =>
-    g.numero_guia.toLowerCase().includes(filterText.toLowerCase()) ||
-    g.cliente_nome.toLowerCase().includes(filterText.toLowerCase())
-  );
-
-  const guiasSorted = [...guiasFiltered].sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === 'numero') cmp = a.numero_guia.localeCompare(b.numero_guia);
-    else if (sortBy === 'cliente') cmp = a.cliente_nome.localeCompare(b.cliente_nome);
-    else cmp = new Date(a.data_criacao).getTime() - new Date(b.data_criacao).getTime();
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
 
 
   // Rule: Sonae MC caderno de encargos
@@ -312,64 +282,13 @@ export const ExpedicaoPaletizacaoModule: React.FC<ExpedicaoPaletizacaoModuleProp
         </div>
       </div>
 
-      {/* Seleção de Guia + Produtos — largura total da página, para caber
-          mais linhas visíveis sem scroll apertado e o resumo ficar largo
-          em vez de espremido na coluna de 7/12. */}
+      {/* Seleção de Guia + Produtos */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
-
-        {/* Seleção Guia com Filtro e Ordenação */}
-        <div>
-          <label className="text-slate-700 block mb-2 font-medium text-sm">1. Selecionar Guia de Transporte</label>
-
-          <div className="flex gap-1 mb-2">
-            <input
-              type="text"
-              placeholder="Procura…"
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="flex-1 bg-white border border-slate-300 rounded p-1.5 text-xs focus:outline-none focus:border-purple-500"
-            />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-slate-50 border border-slate-300 rounded p-1.5 text-xs focus:outline-none focus:border-purple-500"
-            >
-              <option value="numero">Nº</option>
-              <option value="cliente">Cliente</option>
-              <option value="data">Data</option>
-            </select>
-            <button
-              onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
-              className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-xs font-semibold text-slate-700"
-            >
-              {sortDir === 'asc' ? '↑' : '↓'}
-            </button>
-          </div>
-
-          {/* Lista de Guias */}
-          <div className="border border-slate-300 rounded bg-white max-h-48 overflow-y-auto p-1">
-            {guiasSorted.length === 0 ? (
-              <div className="p-2 text-center text-xs text-slate-500">Nenhuma guia</div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1">
-                {guiasSorted.map(g => (
-                  <button
-                    key={g.id}
-                    onClick={() => setSelectedGuiaId(g.id)}
-                    className={`text-left p-1.5 rounded text-xs border transition-all ${
-                      selectedGuiaId === g.id
-                        ? 'bg-purple-50 border-purple-400'
-                        : 'bg-white border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="font-mono font-bold text-purple-700 text-[11px]">{g.nome_documento || g.numero_guia}</div>
-                    <div className="text-[10px] text-slate-600 truncate">{g.cliente_nome}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <GuiaSelectorPanel
+          guias={guias}
+          selectedGuiaId={selectedGuiaId}
+          onSelectGuia={setSelectedGuiaId}
+        />
 
         {/* Modo: Single-produto vs Packing List */}
         {selectedGuia && selectedGuia.linhas.length > 1 && (
@@ -503,153 +422,28 @@ export const ExpedicaoPaletizacaoModule: React.FC<ExpedicaoPaletizacaoModuleProp
         )}
       </div>
 
-      {/* Grid: Inputs Calculator & Visual Stack Preview */}
+      {/* Grid: Calculator & Visualization */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        {/* Left Form: Packing Parameters (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
-
-            {/* Pallet Stacking Parameters */}
-            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-200 pb-3 pt-2">
-              <Layers className="w-4 h-4 text-purple-600" />
-              2. Definir Plano de Empilhamento
-            </h3>
-
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <label className="text-slate-700 block mb-1 font-medium">Caixas por Camada</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="30"
-                  value={caixasPorCamada}
-                  onChange={(e) => setCaixasPorCamada(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono text-purple-700 font-bold focus:outline-none focus:border-purple-500 text-base shadow-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-700 block mb-1 font-medium">Número de Camadas</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={numCamadas}
-                  onChange={(e) => setNumCamadas(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono text-purple-700 font-bold focus:outline-none focus:border-purple-500 text-base shadow-xs"
-                />
-              </div>
-            </div>
-
-            {/* Validação */}
-            <div className="space-y-2 pt-2">
-              {excedeAltura && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span><strong>Aviso:</strong> Altura ({alturaPaleteCm} cm) excede limite {activeRule.altura_maxima_cm} cm!</span>
-                </div>
-              )}
-
-              {excedePeso && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span><strong>Aviso:</strong> Peso ({pesoBrutoKg} kg) excede limite {activeRule.peso_maximo_kg} kg!</span>
-                </div>
-              )}
-
-              {excedeQuantidade && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span><strong>Erro:</strong> Palete requer {caixasNaPaleteProposta} caixas, mas guia tem só {caixasSolicitadas}!</span>
-                </div>
-              )}
-            </div>
-
-            {/* Metrics Summary */}
-            <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-semibold uppercase">ALTURA TOTAL</span>
-                <span className={`text-base font-bold ${excedeAltura ? 'text-rose-600' : 'text-slate-900'}`}>
-                  {alturaPaleteCm} cm
-                </span>
-                <span className="text-[10px] text-slate-500 block">Máx: {activeRule.altura_maxima_cm} cm</span>
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-semibold uppercase">PESO BRUTO</span>
-                <span className={`text-base font-bold ${excedePeso ? 'text-rose-600' : 'text-slate-900'}`}>
-                  {pesoBrutoKg} kg
-                </span>
-                <span className="text-[10px] text-slate-500 block">Máx: {activeRule.peso_maximo_kg} kg</span>
-              </div>
-            </div>
-
-            {/* Botão Materializar */}
-            <button
-              onClick={handleMaterializePallet}
-              disabled={excedeQuantidade || excedeAltura || excedePeso}
-              className={`w-full py-3 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                excedeQuantidade || excedeAltura || excedePeso
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-md active:scale-95'
-              }`}
-            >
-              <Plus className="w-5 h-5" />
-              Materializar Palete + Imprimir Etiqueta
-            </button>
-          </div>
+        <div className="lg:col-span-7">
+          <PaletCalculator
+            linhasSelecionadas={linhasSelecionadas}
+            activeRule={activeRule}
+            caixasPorCamada={caixasPorCamada}
+            numCamadas={numCamadas}
+            onCaixasPorCamadaChange={setCaixasPorCamada}
+            onNumCamadasChange={setNumCamadas}
+            onMaterializePallet={handleMaterializePallet}
+          />
         </div>
-
-        {/* Right: Visual Stack Preview (5 cols) */}
         <div className="lg:col-span-5">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-200 pb-3">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              Visualização da Palete Proposta
-            </h3>
-
-            {/* Stack Visual */}
-            <div className="flex flex-col gap-1 bg-gradient-to-b from-purple-50 to-purple-100 p-3 rounded-lg border border-purple-300 font-mono text-xs">
-              <div className="h-5 bg-gradient-to-r from-purple-700 to-purple-900 border border-purple-600 rounded flex items-center justify-around px-2 text-[9px] font-mono text-purple-200 font-bold shadow-md">
-                <span>|||</span>
-                <span>EURO PALLET 120x80</span>
-                <span>|||</span>
-              </div>
-
-              {Array.from({ length: numCamadas }).map((_, layerIdx) => (
-                <div
-                  key={layerIdx}
-                  className="h-7 bg-gradient-to-r from-purple-400/30 to-purple-500/30 border border-purple-500/50 rounded flex items-center justify-center text-xs font-mono font-bold text-purple-700 transition-all hover:from-purple-400/50 hover:to-purple-500/50 shadow-sm"
-                >
-                  Camada {layerIdx + 1}: {caixasPorCamada} caixas
-                </div>
-              ))}
-            </div>
-
-            <span className="text-xs font-mono text-slate-400 mt-2">
-              Total: {caixasNaPaleteProposta} Caixas • {numCamadas} Camadas
-            </span>
-
-            {/* Dimensões */}
-            <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-lg border border-slate-200 space-y-3">
-              <div className="flex items-center justify-center gap-2">
-                <Ruler className="w-4 h-4 text-slate-600" />
-                <span className="font-mono font-bold text-slate-900">120 × 80 × {alturaPaleteCm} cm</span>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 pt-2 border-t border-slate-200">
-                <Scale className="w-4 h-4 text-slate-600" />
-                <span className="font-mono font-bold text-lg text-slate-900">{pesoBrutoKg} kg</span>
-                <span className="text-xs text-slate-500 font-mono">({pesoLiquidoKg} kg líquido)</span>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 pt-2 border-t border-slate-200">
-                <Tag className="w-4 h-4 text-slate-600" />
-                <span className="font-mono font-bold text-sm text-slate-900">Volume: {(caixasNaPaleteProposta * 0.01).toFixed(2)} m³</span>
-              </div>
-            </div>
-          </div>
+          <PaletVisualization
+            numCamadas={numCamadas}
+            caixasPorCamada={caixasPorCamada}
+            alturaPaleteCm={alturaPaleteCm}
+            pesoBrutoKg={pesoBrutoKg}
+            pesoLiquidoKg={pesoLiquidoKg}
+            excedeAltura={excedeAltura}
+          />
         </div>
       </div>
 
