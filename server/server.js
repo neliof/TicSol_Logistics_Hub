@@ -1189,6 +1189,79 @@ const server = app.listen(port, async () => {
   }
 })
 
+/**
+ * GET /api/artsoft/tipos-documento
+ * Retorna mapa de séries/tipos de documento ARTSOFT → descrição legível (cache client-side)
+ */
+app.get('/api/artsoft/tipos-documento', verifyJWT, async (req, res) => {
+  try {
+    const tiposDocumento = {
+      // Guias de Transporte (V950-V999)
+      'V950': 'Guia de Transporte',
+      'V960': 'Guia de Transporte',
+      'V970': 'Guia de Transporte',
+      'V980': 'Guia de Transporte',
+      'V990': 'Guia de Transporte',
+      'V991': 'Guia de Transporte',
+      'V992': 'Guia de Transporte',
+      'V993': 'Guia de Transporte',
+      'V994': 'Guia de Transporte',
+      'V995': 'Guia de Transporte',
+
+      // Faturas (V001-V099)
+      'V001': 'Fatura',
+      'V010': 'Fatura',
+      'V020': 'Fatura',
+      'V050': 'Fatura',
+      'V099': 'Fatura',
+
+      // Notas de Crédito/Débito (V100-V199)
+      'V100': 'Nota de Crédito',
+      'V110': 'Nota de Crédito',
+      'V120': 'Nota de Crédito',
+      'V150': 'Nota de Débito',
+      'V160': 'Nota de Débito',
+      'V170': 'Nota de Débito',
+      'V199': 'Nota de Débito',
+
+      // Devoluções/Encomendas (A001-A999)
+      'A001': 'Devolução de Compras',
+      'A010': 'Devolução de Compras',
+      'A100': 'Encomenda de Compra',
+      'A110': 'Encomenda de Compra',
+      'A200': 'Orçamento',
+      'A210': 'Orçamento',
+
+      // Recibos/Pagamentos (B001-B999)
+      'B001': 'Recibo',
+      'B010': 'Recibo',
+      'B100': 'Extracto de Conta',
+      'B110': 'Extracto de Conta',
+
+      // Alias curtos (2 letras)
+      'GR': 'Guia de Receção',
+      'GT': 'Guia de Transporte',
+      'GE': 'Guia de Expedição',
+      'NC': 'Nota de Crédito',
+      'ND': 'Nota de Débito',
+      'RF': 'Recibo de Fornecedor',
+    }
+
+    res.json({
+      success: true,
+      tipos: tiposDocumento,
+      cached: true,
+      cache_ttl_seconds: 86400,
+    })
+  } catch (err) {
+    console.error('GET /api/artsoft/tipos-documento error:', err.message)
+    res.status(500).json({
+      error: err.message,
+      code: 'TIPOS_DOCUMENTO_ERROR',
+    })
+  }
+})
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM: encerrando…')

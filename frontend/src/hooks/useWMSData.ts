@@ -4,20 +4,55 @@ import { api, LinhaReconciliacao } from '../api';
 
 /** Mapa de séries/tipos de documento ARTSOFT → descrição legível */
 const TIPO_DOCUMENTO_MAP: Record<string, string> = {
-  'V990': 'Guia de Transporte',
-  'V980': 'Guia de Transporte',
-  'V970': 'Guia de Transporte',
-  'V960': 'Guia de Transporte',
+  // Guias de Transporte (vários intervalos V950-V999)
   'V950': 'Guia de Transporte',
+  'V960': 'Guia de Transporte',
+  'V970': 'Guia de Transporte',
+  'V980': 'Guia de Transporte',
+  'V990': 'Guia de Transporte',
+  'V991': 'Guia de Transporte',
+  'V992': 'Guia de Transporte',
+  'V993': 'Guia de Transporte',
+  'V994': 'Guia de Transporte',
+  'V995': 'Guia de Transporte',
+
+  // Faturas (V001-V099)
   'V001': 'Fatura',
   'V010': 'Fatura',
-  'V100': 'Crédito',
-  'A001': 'Devolução',
-  'GR': 'Guia Receção',
-  'GT': 'Guia Transporte',
-  'GE': 'Guia Expedição',
-  'NC': 'Nota Crédito',
-  'ND': 'Nota Débito',
+  'V020': 'Fatura',
+  'V050': 'Fatura',
+  'V099': 'Fatura',
+
+  // Notas de Crédito/Débito (V100-V199)
+  'V100': 'Nota de Crédito',
+  'V110': 'Nota de Crédito',
+  'V120': 'Nota de Crédito',
+  'V150': 'Nota de Débito',
+  'V160': 'Nota de Débito',
+  'V170': 'Nota de Débito',
+  'V199': 'Nota de Débito',
+
+  // Devoluções/Encomendas (A001-A999)
+  'A001': 'Devolução de Compras',
+  'A010': 'Devolução de Compras',
+  'A100': 'Encomenda de Compra',
+  'A110': 'Encomenda de Compra',
+  'A200': 'Orçamento',
+  'A210': 'Orçamento',
+
+  // Recibos/Pagamentos (B001-B999)
+  'B001': 'Recibo',
+  'B010': 'Recibo',
+  'B100': 'Extracto de Conta',
+  'B110': 'Extracto de Conta',
+
+  // Alias curtos (2 letras)
+  'GR': 'Guia de Receção',
+  'GT': 'Guia de Transporte',
+  'GE': 'Guia de Expedição',
+  'NC': 'Nota de Crédito',
+  'ND': 'Nota de Débito',
+  'RF': 'Recibo de Fornecedor',
 };
 
 /**
@@ -49,14 +84,14 @@ function snapshotParaStock(r: LinhaReconciliacao): StockPosition {
 }
 
 /** Mapeia documento ARTSOFT (de logistics.documento) para ReceivingOrder */
-function docParaReceivingOrder(d: any): ReceivingOrder {
+function docParaReceivingOrder(d: any, tiposMap: Record<string, string> = TIPO_DOCUMENTO_MAP): ReceivingOrder {
   const xml = typeof d.conteudo_xml === 'string'
     ? (() => { try { return JSON.parse(d.conteudo_xml); } catch { return {}; } })()
     : d.conteudo_xml || {};
 
   // Tipo de documento: lookup por série/tipo_saft
   const serie = d.origem_serie || '';
-  const tipoDescricao = TIPO_DOCUMENTO_MAP[serie] || d.tipo || 'Documento';
+  const tipoDescricao = tiposMap[serie] || d.tipo || 'Documento';
 
   // Nome do documento: tipo_documento + observações/pedido_origem/terceiro_nome
   const detalhe = xml.observacoes || xml.pedido_origem || xml.terceiro_nome || '';
@@ -129,15 +164,17 @@ export function useWMSData() {
   const [stock, setStock] = useState<StockPosition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tiposDocumento, setTiposDocumento] = useState<Record<string, string>>(TIPO_DOCUMENTO_MAP);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [recon, paletesRows, docsRows] = await Promise.all([
+        const [recon, paletesRows, docsRows, tiposRes] = await Promise.all([
           api.reconciliacaoStock(500),
           api.paletes(500).catch(() => [] as any[]),
           api.listarDocumentos(100).catch(() => [] as any[]),
+          fetch('/api/artsoft/tipos-documento').then(r => r.json()).catch(() => ({ tipos: TIPO_DOCUMENTO_MAP })),
         ]);
 
         setStock(
@@ -146,16 +183,20 @@ export function useWMSData() {
             .map(snapshotParaStock)
         );
         setPallets(paletesRows as unknown as PalletSSCC[]);
+        if (tiposRes && tiposRes.tipos) {
+          setTiposDocumento(tiposRes.tipos);
+        }
         setOrders(
           (docsRows || [])
-            .map(docParaReceivingOrder)
+            .map(d => docParaReceivingOrder(d, tiposRes?.tipos || TIPO_DOCUMENTO_MAP))
             .filter(o => o.numero_guia) // Ignora documentos sem número
         );
         setError(null);
       } catch (err) {
         console.warn('Erro ao carregar dados (usando mocks):', err);
         // Fallback para mock data em caso de erro (dev phase)
-        setOrders(MOCK_RECEIVING_ORDERS);
+        setOrders(MOCK_RECEIVING_ORDERS.map(d => docParaReceivingOrder(d, TIPO_DOCUMENTO_MAP)));
+        setTiposDocumento(TIPO_DOCUMENTO_MAP);
         setError(null);
       } finally {
         setLoading(false);
@@ -167,5 +208,5 @@ export function useWMSData() {
     return () => clearInterval(interval);
   }, []);
 
-  return { orders, pallets, stock, loading, error, setOrders, setPallets, setStock };
+  return { orders, pallets, stock, loading, error, tiposDocumento, setOrders, setPallets, setStock };
 }
