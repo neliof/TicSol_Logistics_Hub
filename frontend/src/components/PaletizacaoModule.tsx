@@ -2,20 +2,21 @@ import React, { useState } from 'react';
 import { ReceivingOrder, PalletSSCC, RuleConfig } from '../types/wms';
 import { generateSSCC, buildGS1128String, formatToGS1Date } from '../utils/gs1';
 import { GS1LabelPrintModal } from './GS1LabelPrintModal';
-import { 
-  Boxes, 
-  Layers, 
-  Tag, 
-  Scale, 
-  Ruler, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Printer, 
-  ShieldCheck, 
-  Plus, 
+import {
+  Boxes,
+  Layers,
+  Tag,
+  Scale,
+  Ruler,
+  CheckCircle2,
+  AlertTriangle,
+  Printer,
+  ShieldCheck,
+  Plus,
   Sparkles,
   ArrowRight,
-  Database
+  Database,
+  Calendar
 } from 'lucide-react';
 
 interface PaletizacaoModuleProps {
@@ -25,6 +26,7 @@ interface PaletizacaoModuleProps {
   selectedTenant: string;
   onPalletCreated: (pallet: PalletSSCC, orderId: string, lineId: string, boxesAdded: number) => void;
   preSelectedOrderAndLine?: { orderId: string; lineId: string } | null;
+  onSyncDocuments?: (dataInicio?: string, dataFim?: string) => Promise<void>;
 }
 
 export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
@@ -33,8 +35,33 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
   ruleConfigs,
   selectedTenant,
   onPalletCreated,
-  preSelectedOrderAndLine
+  preSelectedOrderAndLine,
+  onSyncDocuments
 }) => {
+  // Sync modal state
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncDataInicio, setSyncDataInicio] = useState('');
+  const [syncDataFim, setSyncDataFim] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    if (!onSyncDocuments) return;
+    setSyncLoading(true);
+    try {
+      await onSyncDocuments(syncDataInicio || undefined, syncDataFim || undefined);
+      setShowSyncModal(false);
+      setSyncDataInicio('');
+      setSyncDataFim('');
+      setSyncMessage('Documentos sincronizados!');
+      setTimeout(() => setSyncMessage(null), 4000);
+    } catch (err) {
+      setSyncMessage(`Erro: ${err instanceof Error ? err.message : 'erro desconhecido'}`);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   // Find order and line
   const [selectedOrderId, setSelectedOrderId] = useState<string>(
     preSelectedOrderAndLine?.orderId || orders[0]?.id || ''
@@ -220,9 +247,18 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-mono text-blue-700">
-          <ShieldCheck className="w-4 h-4 text-blue-600" />
-          <span>Regra Ativa: <strong>{activeRule.cliente_nome}</strong></span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowSyncModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+          >
+            <Calendar className="w-4 h-4" />
+            Sincronizar
+          </button>
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-mono text-blue-700">
+            <ShieldCheck className="w-4 h-4 text-blue-600" />
+            <span>Regra Ativa: <strong>{activeRule.cliente_nome}</strong></span>
+          </div>
         </div>
       </div>
 
@@ -482,6 +518,75 @@ export const PaletizacaoModule: React.FC<PaletizacaoModuleProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Sync Message Notification */}
+      {syncMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-blue-500 text-white font-bold px-4 py-3 rounded-lg shadow-xl border border-blue-400 animate-pulse">
+          {syncMessage}
+        </div>
+      )}
+
+      {/* Sync Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              Sincronizar Documentos
+            </h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Sincroniza guias de receção configuradas com intervalo de datas (opcional).
+            </p>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Data Início (opcional)
+                </label>
+                <input
+                  type="date"
+                  value={syncDataInicio}
+                  onChange={(e) => setSyncDataInicio(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Data Fim (opcional)
+                </label>
+                <input
+                  type="date"
+                  value={syncDataFim}
+                  onChange={(e) => setSyncDataFim(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSyncModal(false)}
+                disabled={syncLoading}
+                className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSync}
+                disabled={syncLoading}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {syncLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  'Sincronizar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
