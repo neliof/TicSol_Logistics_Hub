@@ -65,6 +65,9 @@ function AppAutenticada({
   const [activeTab, setActiveTab] = useState<AppTab>('rececao');
   const [selectedTenant, setSelectedTenant] = useState<string>('TicSol_HuB (Sonae MC)');
 
+  // Toast notifications
+  const { toasts, removeToast, success: showSuccess, error: showError, info: showInfo } = useToast();
+
   // Series Config — Load configurations for both modules
   const receçãoConfig = useSeriesConfig('receção');
   const expedicãoConfig = useSeriesConfig('expedição');
@@ -94,9 +97,9 @@ function AppAutenticada({
 
   // Handler: When a pallet SSCC is created (materialized)
   const handlePalletCreated = (
-    newPallet: PalletSSCC, 
-    orderId: string, 
-    lineId: string, 
+    newPallet: PalletSSCC,
+    orderId: string,
+    lineId: string,
     boxesAdded: number
   ) => {
     // 1. Append Pallet to SSCC list
@@ -161,6 +164,9 @@ function AppAutenticada({
       ip_terminal: '192.168.1.105 (Terminal Cais)'
     };
     setAuditLogs(prev => [newLog, ...prev]);
+
+    // 5. Show success notification
+    showSuccess(`Palete ${newPallet.sscc} criada com sucesso`);
   };
 
   // Handler: Relocate Stock Position
@@ -220,6 +226,7 @@ function AppAutenticada({
       ip_terminal: '192.168.1.110 (Terminal Paletização)'
     };
     setAuditLogs(prev => [log, ...prev]);
+    showSuccess(`Palete ${palete.sscc} (Expedição) criada com sucesso`);
   };
 
   // Handler: Create Embarque Comprovante
@@ -257,8 +264,10 @@ function AppAutenticada({
         console.log('[App] Reloading expedição guias');
         setGuiasEntrada([...guiasEntrada]); // Trigger reload via hook
       }
+      showSuccess('Sincronização de documentos concluída com sucesso');
     } catch (err) {
       console.error('[App] Sync failed:', err);
+      showError(`Erro ao sincronizar: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
       throw err;
     }
   };
@@ -465,6 +474,9 @@ function AppAutenticada({
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500 font-mono shadow-inner">
         <p>TicSol Logistics Hub B2B • WMS v2.4 • Base de Dados: <code className="text-blue-600 font-bold">ticsol_wms</code> (PostgreSQL / PostgREST)</p>
       </footer>
+
+      {/* Toast Notifications Container */}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }
