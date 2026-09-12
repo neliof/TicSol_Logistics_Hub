@@ -66,11 +66,13 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
-// Dev phase: se sem token, gera automaticamente
 const verifyJWT = (req, res, next) => {
   const authHeader = req.headers.authorization
   if (!authHeader) {
-    // Dev: gera token automático
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(401).json({ error: 'Missing bearer token' })
+    }
+    // Dev only: gera token automático para facilitar testes locais
     const token = jwt.sign(
       { usuario_id: 'dev-user', empresa_id: '11111111-1111-1111-1111-111111111111', email: 'dev@localhost', nome: 'Dev' },
       jwtSecret,
@@ -143,6 +145,11 @@ const setEmpresaContext = async (req, res, next) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
+
+// Rate limiting geral para API — 100 req/15min por utilizador (ver rateLimiter.js)
+app.use('/rest/v1', apiLimiter)
+app.use('/rpc', apiLimiter)
+app.use('/api/artsoft', apiLimiter)
 
 app.get('/health/sync/:empresaId', async (req, res) => {
   try {
@@ -388,6 +395,9 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
  * Remover em produção — restaurar autenticação obrigatória.
  */
 app.get('/auth/dev-token', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).end()
+  }
   const empresaId = '11111111-1111-1111-1111-111111111111'
   const token = jwt.sign(
     {
@@ -418,7 +428,7 @@ app.get('/auth/dev-token', (req, res) => {
 app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
     // Dev phase: empresa_id from query, token, or default
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -479,7 +489,7 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
 
 app.post('/api/artsoft/produtos/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -531,7 +541,7 @@ app.post('/api/artsoft/produtos/sync', verifyJWT, syncLimiter, async (req, res) 
 
 app.post('/api/artsoft/terceiros/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -575,7 +585,7 @@ app.post('/api/artsoft/terceiros/sync', verifyJWT, syncLimiter, async (req, res)
 
 app.post('/api/artsoft/stock/sync', verifyJWT, syncLimiter, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -623,7 +633,7 @@ app.post('/api/artsoft/stock/sync', verifyJWT, syncLimiter, async (req, res) => 
  */
 app.get('/api/artsoft/config', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -667,7 +677,7 @@ app.get('/api/artsoft/config', verifyJWT, async (req, res) => {
  */
 app.post('/api/artsoft/config', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -720,7 +730,7 @@ app.post('/api/artsoft/config', verifyJWT, async (req, res) => {
  */
 app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -897,7 +907,7 @@ app.get('/api/artsoft/series/discover', verifyJWT, async (req, res) => {
  */
 app.get('/api/artsoft/series/config/:modulo', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -952,7 +962,7 @@ app.get('/api/artsoft/series/config/:modulo', verifyJWT, async (req, res) => {
  */
 app.post('/api/artsoft/series/config', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -1028,7 +1038,7 @@ const ORDEM_TEST_DATA = ['documentos', 'caixas', 'etiquetas', 'template_etiqueta
  */
 app.get('/api/artsoft/test-data/contagem', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -1073,7 +1083,7 @@ app.get('/api/artsoft/test-data/contagem', verifyJWT, async (req, res) => {
  */
 app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
@@ -1132,7 +1142,7 @@ app.delete('/api/artsoft/test-data', verifyJWT, async (req, res) => {
  */
 app.post('/api/artsoft/series/save', verifyJWT, async (req, res) => {
   try {
-    const empresaId = String(req.query.empresa_id || req.user?.empresa_id || req.body?.empresa_id || '11111111-1111-1111-1111-111111111111')
+    const empresaId = String(req.user?.empresa_id || '11111111-1111-1111-1111-111111111111')
     if (!UUID_RE.test(empresaId)) {
       return res.status(400).json({ error: 'Invalid empresa_id format' })
     }
