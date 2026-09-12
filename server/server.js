@@ -337,6 +337,11 @@ const { setupExpedicaoEndpoints } = await import('./expedicao-endpoints.js')
 setupExpedicaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
 console.log('[EXPEDICAO] 6 endpoints registados com sucesso')
 
+// Setup P4 Palete de Expedição / Carga (embarque)
+const { setupExpedicaoPaletesEndpoints } = await import('./expedicao-paletes-endpoints.js')
+setupExpedicaoPaletesEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[EXPEDICAO-PALETES] 6 endpoints registados com sucesso')
+
 app.get('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
   console.log(`[GET /rest/v1/:table] table=${req.params.table}, user=${req.user ? 'yes' : 'no'}`)
   try {
