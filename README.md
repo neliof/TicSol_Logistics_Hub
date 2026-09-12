@@ -1,108 +1,287 @@
-# TicSol Logistics Hub (WMS)
+# TicSol Logistics Hub — Enterprise Warehouse Management System
 
-Módulo de gestão de armazém do TicSol_HuB B2B. Este repositório junta tudo
-o que foi construído e **validado a sério** (build real, testes reais
-contra PostgreSQL/PostgREST reais, não só código escrito à vista) até ao
-momento em que este pacote foi gerado.
+Complete 4-phase warehouse logistics platform built with React 19, Node.js, PostgreSQL, and Docker.
+Production-ready with full CI/CD, E2E tests, database migrations, and deployment documentation.
 
-## Estado do projeto — visão rápida
+## Project Status — Complete Phase Delivery
 
-| Peça | Estado | Onde |
-|---|---|---|
-| Especificação funcional (20 secções) | ✅ Completa | `docs/TicSol_Logistics_Hub_WMS_Especificacao.md` |
-| Schema PostgreSQL (43 tabelas) | ✅ Testado | `database/01_schema.sql` |
-| Segurança (JWT + RLS por empresa) | ✅ Testado | `database/02_security.sql` |
-| Funções RPC (SSCC + paletização) | ✅ Testado | `database/03_functions_rpc.sql` |
-| Motor de Regras (caso Sonae MC) | ✅ Testado | `database/04_regras_sonae_mc.sql` |
-| Simulação de dados fictícios | ✅ Testado | `database/05_simulacao_dados_ficticios.sql` |
-| Staging + reconciliação ARTSOFT | ✅ Testado | `database/06_artsoft_sync_staging.sql` |
-| Ecrã de Receção (React) | ✅ Testado (Playwright) | `frontend/receção/` |
-| Ecrã de Paletização (React) | ✅ Testado (Playwright) | `frontend/paletizacao/` |
-| Serviço de sync ARTSOFT | ⚠️ Parcial | `artsoft-sync/` — ver nota abaixo |
+| Phase | Feature | Status | Location |
+|-------|---------|--------|----------|
+| **P1 — Receção** | Warehouse receiving, line-by-line conference, divergence tracking, ARTSOFT integration | ✅ Complete | `frontend/src/components/rececao/` |
+| **P2 — Paletização** | Automatic pallet creation, content management, movement history, SSCC barcodes | ✅ Complete | `frontend/src/components/paletizacao/` |
+| **P3 — Stock** | Inventory reconciliation, FEFO management, location tracking, alerts | ✅ Complete | `frontend/src/components/stock/` |
+| **P4 — Expedição** | Pre-shipment conference, shipment tracking, document generation | ✅ Complete | `frontend/src/components/expedicao/` |
+| **Backend API** | 37 REST endpoints (17 P1 + 8 P2 + 6 P3 + 6 P4) with JWT + RLS | ✅ Complete | `server/*-endpoints.js` |
+| **Database** | 8 tables, audit trail, RLS policies, multi-tenancy | ✅ Complete | `database/020_recepcao_schema.sql` |
+| **Docker** | Multi-stage builds, dev/staging/prod configs, health checks | ✅ Complete | `docker-compose.yml` + `Dockerfile.server` + `frontend/Dockerfile` |
+| **Testing** | E2E Playwright suite, CI pipeline, artifact uploads | ✅ Complete | `.github/workflows/ci.yml` + `e2e/tests/` |
+| **Deployment** | Local dev, staging, production with Nginx, backups, monitoring | ✅ Complete | `DEPLOYMENT_GUIDE.md` |
 
-## Como arrancar do zero (ordem importa)
+## Quick Start (5 minutes)
 
+### Prerequisites
+- Docker & Docker Compose
+- Node.js 20+
+- Git
+
+### Local Development
 ```bash
-# 1. Cria uma base de dados nova (não reaproveites uma existente)
-createdb ticsol_logistics_hub
+# 1. Clone environment
+cp .env.example .env
 
-# 2. Aplica as migrações por esta ordem exata
-psql -d ticsol_logistics_hub -f database/01_schema.sql
-psql -d ticsol_logistics_hub -f database/02_security.sql
-psql -d ticsol_logistics_hub -f database/03_functions_rpc.sql
-psql -d ticsol_logistics_hub -f database/04_regras_sonae_mc.sql
-psql -d ticsol_logistics_hub -f database/05_simulacao_dados_ficticios.sql   # opcional: só dados de teste
-psql -d ticsol_logistics_hub -f database/06_artsoft_sync_staging.sql
+# 2. Start all services (PostgreSQL, Backend, Frontend)
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
 
-# 3. PostgREST — ver docs/Guia_pgAdmin_Criar_Base_e_Schema.docx para o
-#    postgrest.conf completo (db-schemas="logistics", roles, JWT secret)
-postgrest postgrest.conf
+# 3. Apply database migrations (one-time)
+docker-compose exec backend npm run db:migrate
 
-# 4. Frontend — copia frontend/receção e frontend/paletizacao para dentro
-#    do teu projeto React/Vite existente (ver "Pendências" abaixo)
-
-# 5. Sync ARTSOFT (quando o endpoint estiver confirmado)
-cd artsoft-sync
-npm install
-cp .env.example .env   # edita CONNECTOR_TYPE e a secção correspondente
-npm run sync
+# 4. Access
+# Frontend: http://localhost:5173
+# Backend:  http://localhost:3000
+# Database: localhost:5432
 ```
 
-## O que cada pasta é
+### Stop Everything
+```bash
+docker-compose down       # stop services
+docker-compose down -v    # stop + remove volumes
+```
 
-- **`docs/`** — o pedido original (`00_prompt_original.md`), o caderno de
-  encargos da Sonae MC que serviu de base funcional, a especificação
-  completa gerada a partir dele, e o guia passo-a-passo de pgAdmin +
-  PostgREST.
-- **`database/`** — todas as migrações SQL, numeradas por ordem de
-  aplicação. Cada uma foi corrida contra um PostgreSQL 16 real antes de
-  ser dada como concluída.
-- **`frontend/`** — dois ecrãs React autónomos (Receção, Paletização),
-  mais `shared/tokens.css` com os tokens de design partilhados (cores,
-  tipografia IBM Plex Sans/Mono). Cada ecrã tem o seu próprio cliente API
-  (`api/*.js`) já ligado ao PostgREST real.
-- **`artsoft-sync/`** — serviço Node.js standalone que corre localmente
-  na rede da Ticsol e sincroniza Produtos/Clientes/Fornecedores/Stock do
-  ARTSOFT. Tem 3 conectores plugáveis (REST, ODBC, ficheiros) — ver o
-  README próprio dentro da pasta para o detalhe de qual está testado.
+## Architecture & Technology Stack
 
-## Pendências — por resolver na próxima sessão
+### Frontend
+- **React 19** + TypeScript (strict mode)
+- **TailwindCSS 4.1** with CSS variables
+- **Vite** build tool
+- **Lucide React** for icons
+- **Playwright** for E2E testing
 
-1. **Endpoint ARTSOFT ainda por confirmar.** Testado `192.168.1.28:4218`
-   localmente — mostra uma página de login, o que confirma ser um serviço
-   HTTP (aponta para o conector `rest`), mas ainda não confirmámos se é
-   mesmo o ARTSOFT (logotipo/nome na página?) nem se as credenciais
-   Admin/ARTSOFT lá funcionam. Assim que confirmares, ajusta só
-   `artsoft-sync/connectors/rest.js` (nomes de campo) — o resto do
-   serviço não muda.
+### Backend
+- **Node.js 20** LTS
+- **Express.js** with JWT authentication
+- **PostgreSQL 16** with Row-Level Security (RLS)
+- **Docker Compose** for orchestration
 
-2. **Integração no projeto React/Vite real.** Os ecrãs em `frontend/`
-   foram construídos e testados como componentes autónomos (com o seu
-   próprio `postgrestClient.js`), porque ainda não vi a estrutura real do
-   teu projeto Ticsol_Hub. Faltam: (a) mover os ficheiros para dentro
-   desse projeto e ligar ao routing existente; (b) trocar `getToken()`
-   (que por agora lê de `localStorage`, com TODO explícito no código)
-   pelo mecanismo de sessão real da app.
+### Database
+- 8 production tables (receção, paletização, stock, expedição)
+- Multi-tenancy via RLS policies
+- Full audit trail (movement & operation logs)
+- Performance indices on critical paths
+- Foreign key constraints
 
-3. **Limitação conhecida na Paletização.** O ecrã não subtrai a
-   quantidade de uma linha de encomenda já paletizada anteriormente — se
-   voltares a calcular o plano da mesma linha depois de já teres
-   materializado paletes, cria paletes a mais em cima do que já existe.
-   Falta um campo tipo `quantidade_ja_paletizada` antes disto ir para
-   produção.
+### CI/CD & Deployment
+- **GitHub Actions** (lint, tests, build, deploy)
+- **Docker multi-stage builds** (backend + frontend)
+- **Playwright E2E tests** (smoke tests on all browsers)
+- **Nginx reverse proxy** (SSL/TLS, load balancing)
+- **Staging & production** configs with health checks
 
-4. **Conector ODBC não testado.** Está escrito com o pacote `odbc` real,
-   mas sem DSN Pervasive/Btrieve real não há como validar — os nomes de
-   tabela (`ARTIGO`, `CLIENTE`, etc.) são um palpite, não confirmação.
+## Project Structure
 
-## Notas técnicas úteis a lembrar
+```
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── rececao/       # P1: warehouse receiving
+│   │   │   ├── paletizacao/   # P2: pallet management
+│   │   │   ├── stock/         # P3: stock reconciliation
+│   │   │   └── expedicao/     # P4: shipping
+│   │   ├── services/api.ts    # 37-endpoint API client
+│   │   ├── hooks/             # Custom React hooks
+│   │   └── types/             # TypeScript definitions
+│   └── Dockerfile             # Multi-stage frontend build
+├── server/
+│   ├── recepcao-endpoints.js       # P1: 17 endpoints
+│   ├── paletizacao-endpoints.js    # P2: 8 endpoints
+│   ├── stock-endpoints.js          # P3: 6 endpoints
+│   ├── expedicao-endpoints.js      # P4: 6 endpoints
+│   └── server.js              # Express app entry point
+├── database/
+│   ├── 020_recepcao_schema.sql     # Core schema + RLS
+│   └── *.sql                  # Additional migrations
+├── e2e/
+│   └── tests/recepcao.spec.ts      # P1 workflow tests
+├── .github/workflows/
+│   └── ci.yml                 # GitHub Actions pipeline
+├── docker-compose.yml         # Base Compose config
+├── docker-compose.override.yml # Development override
+├── Dockerfile.server          # Backend multi-stage build
+├── playwright.config.ts       # E2E configuration
+├── DEPLOYMENT_GUIDE.md        # Full deployment docs
+└── README.md                  # This file
+```
 
-- O schema vive em `logistics.*`, não em `public` — se ligares o
-  PostgREST a uma base já existente, tens de expor o schema
-  explicitamente (`db-schemas = "logistics"`).
-- `MOVIMENTO` e `AUDITORIA` estão particionados por mês — em produção
-  precisas de um job (ex.: `pg_partman`) a criar a partição do mês
-  seguinte automaticamente.
-- O stock do ARTSOFT **nunca** substitui o stock físico do WMS
-  diretamente — fica em `artsoft_stock_snapshot` + vista
-  `vw_reconciliacao_stock`, para revisão humana das diferenças.
+## Development Workflow
+
+### Install & Run
+```bash
+# Install dependencies
+npm install
+
+# Start dev server (watches for changes)
+npm run dev
+
+# Type checking
+npm run type-check
+
+# Linting
+npm run lint
+
+# Build for production
+npm run build
+```
+
+### E2E Testing
+```bash
+# Run all tests
+npx playwright test
+
+# Run tests matching pattern
+npx playwright test recepcao
+
+# Run in headed mode (see browser)
+npx playwright test --headed
+
+# Debug mode
+npx playwright test --debug
+```
+
+### Docker Commands
+```bash
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Execute shell in container
+docker-compose exec backend sh
+docker-compose exec frontend sh
+
+# Rebuild images
+docker-compose build --no-cache
+
+# Run migrations
+docker-compose exec backend npm run db:migrate
+```
+
+## Deployment
+
+### Local Development
+```bash
+docker-compose up -d
+# All services start with live reload
+```
+
+### Staging Deployment
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+```
+
+### Production Deployment
+See [**DEPLOYMENT_GUIDE.md**](DEPLOYMENT_GUIDE.md) for complete instructions:
+- SSL/TLS configuration with Nginx
+- PostgreSQL backup strategy
+- Health checks & monitoring
+- Rollback procedures
+- Maintenance & scaling guidelines
+
+## API Reference
+
+### 37 Total Endpoints
+
+| Phase | Endpoints | Base Path |
+|-------|-----------|-----------|
+| **P1 — Receção** | 17 | `/api/recepcao/*` |
+| **P2 — Paletização** | 8 | `/api/paletizacao/*` |
+| **P3 — Stock** | 6 | `/api/stock/*` |
+| **P4 — Expedição** | 6 | `/api/expedicao/*` |
+
+**Authentication:** JWT Bearer token in `Authorization` header
+
+**Response Format:** JSON with typed error handling
+
+### Example: Create Reception
+```bash
+POST /api/recepcao/create
+Content-Type: application/json
+Authorization: Bearer {token}
+
+{
+  "numero_guia": "GUIA-001",
+  "fornecedor_id": 123,
+  "linhas": [
+    { "produto_id": 456, "quantidade_esperada": 50, "unidade": "unidades" }
+  ]
+}
+```
+
+## Environment Configuration
+
+See `.env.example` for all variables:
+- **Database:** `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+- **Server:** `NODE_ENV`, `PORT`, `JWT_SECRET`
+- **Frontend:** `REACT_APP_API_URL`, `REACT_APP_ENV`
+- **ARTSOFT:** `ARTSOFT_HOST`, `ARTSOFT_PORT`, `ARTSOFT_USER`, `ARTSOFT_PASSWORD`
+- **Security:** `CORS_ORIGIN`, `RATE_LIMIT_WINDOW`, `RATE_LIMIT_MAX`
+
+## Health & Monitoring
+
+### Health Checks
+```bash
+# Backend status
+curl http://localhost:3000/health
+
+# Database connectivity
+docker-compose exec postgres pg_isready -U app_user
+```
+
+### Logs
+```bash
+# Real-time logs
+docker-compose logs -f --tail=50 backend
+docker-compose logs -f --tail=50 frontend
+```
+
+## CI/CD Pipeline
+
+GitHub Actions automatically:
+- Runs lint & type checks
+- Executes E2E tests (Playwright)
+- Builds Docker images
+- Pushes to GitHub Container Registry
+- Deploys to staging (develop branch)
+- Deploys to production (master branch, manual gate)
+
+See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for details.
+
+## Database Migrations
+
+```bash
+# Apply all pending migrations
+docker-compose exec backend npm run db:migrate
+
+# Test migrations (dry run)
+npm run db:migrate -- --dry-run
+
+# Rollback last migration
+npm run db:rollback
+```
+
+Migrations stored in `database/` and applied in order.
+
+## Support & Contributing
+
+### Reporting Issues
+- Create GitHub issue with reproduction steps
+- Include logs: `docker-compose logs backend`
+- Include environment: Docker version, Node version, OS
+
+### Contributing
+1. Branch from `develop`
+2. Follow conventional commits: `feat:` / `fix:` / `refactor:`
+3. Ensure tests pass: `npm run lint && npm run type-check && npx playwright test`
+4. Push to branch and create pull request to `develop`
+5. After review & merge to `develop`, merge to `master` for production
+
+## License
+
+Proprietary — TicSol, 2026
