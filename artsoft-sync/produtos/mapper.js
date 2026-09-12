@@ -115,7 +115,7 @@ export async function upsertProduto(client, empresaId, produto) {
     INSERT INTO logistics.produto (
       empresa_id, sku_interno, ean13, descricao,
       peso_liquido_kg, unidades_por_caixa,
-      controla_lote, controla_validade, dimensoes_caixa_mm, updated_at
+      controla_lote, controla_validade, dados_extra, updated_at
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
     ON CONFLICT (empresa_id, sku_interno) DO UPDATE SET
       ean13 = EXCLUDED.ean13,
@@ -124,7 +124,7 @@ export async function upsertProduto(client, empresaId, produto) {
       unidades_por_caixa = EXCLUDED.unidades_por_caixa,
       controla_lote = EXCLUDED.controla_lote,
       controla_validade = EXCLUDED.controla_validade,
-      dimensoes_caixa_mm = COALESCE(logistics.produto.dimensoes_caixa_mm, '{}'::jsonb) || EXCLUDED.dimensoes_caixa_mm,
+      dados_extra = COALESCE(logistics.produto.dados_extra, '{}'::jsonb) || EXCLUDED.dados_extra,
       updated_at = NOW()
     RETURNING (xmax = 0) AS criado_novo
     `,
@@ -218,12 +218,12 @@ export async function processarProdutos(client, empresaId, produtos) {
     INSERT INTO logistics.produto (
       empresa_id, sku_interno, ean13, descricao,
       peso_liquido_kg, unidades_por_caixa,
-      controla_lote, controla_validade, dimensoes_caixa_mm, updated_at
+      controla_lote, controla_validade, dados_extra, updated_at
     )
     SELECT $1, * FROM unnest(
       $2::varchar[], $3::varchar[], $4::text[], $5::numeric[],
       $6::int[], $7::boolean[], $8::boolean[], $9::jsonb[]
-    ) AS t(sku_interno, ean13, descricao, peso_liquido_kg, unidades_por_caixa, controla_lote, controla_validade, dimensoes_caixa_mm)
+    ) AS t(sku_interno, ean13, descricao, peso_liquido_kg, unidades_por_caixa, controla_lote, controla_validade, dados_extra)
     ON CONFLICT (empresa_id, sku_interno) DO UPDATE SET
       ean13 = EXCLUDED.ean13,
       descricao = EXCLUDED.descricao,
@@ -231,7 +231,7 @@ export async function processarProdutos(client, empresaId, produtos) {
       unidades_por_caixa = EXCLUDED.unidades_por_caixa,
       controla_lote = EXCLUDED.controla_lote,
       controla_validade = EXCLUDED.controla_validade,
-      dimensoes_caixa_mm = COALESCE(logistics.produto.dimensoes_caixa_mm, '{}'::jsonb) || EXCLUDED.dimensoes_caixa_mm,
+      dados_extra = COALESCE(logistics.produto.dados_extra, '{}'::jsonb) || EXCLUDED.dados_extra,
       updated_at = NOW()
     RETURNING (xmax = 0) AS criado_novo
     `,
