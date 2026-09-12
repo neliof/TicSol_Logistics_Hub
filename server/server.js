@@ -1182,6 +1182,11 @@ const { setupPaletizacaoEndpoints } = await import('./paletizacao-endpoints.js')
 setupPaletizacaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
 console.log('[PALETIZACAO] 8 endpoints registados com sucesso')
 
+// Setup P3 Stock endpoints
+const { setupStockEndpoints } = await import('./stock-endpoints.js')
+setupStockEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[STOCK] 6 endpoints registados com sucesso')
+
 const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
 
