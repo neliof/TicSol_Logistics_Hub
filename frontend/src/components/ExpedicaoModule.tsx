@@ -128,8 +128,8 @@ export const ExpedicaoModule: React.FC<ExpedicaoModuleProps> = ({
         <p className="text-blue-100">Paletização + Embarque para Sonae MC, Nívea, Tesa, Tena, etc</p>
       </div>
 
-      {/* Main 3-Column Layout */}
-      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
+      {/* Main 3-Column Layout — Responsive */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
         {/* Column 1: Guias List */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">

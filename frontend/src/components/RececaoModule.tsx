@@ -165,8 +165,8 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
         <p className="text-blue-100">Verificação de lotes/validade, controlo de danos e encaminhamento</p>
       </div>
 
-      {/* Main 3-Column Layout */}
-      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
+      {/* Main 3-Column Layout — Responsive */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
         {/* Column 1: Orders List */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
