@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ReceivingOrder, ReceivingLine } from '../types/wms';
 import { useSeriesConfig } from '../hooks/useSeriesConfig';
 import { SyncDocumentsModal } from './SyncDocumentsModal';
+import { EmptyState } from './EmptyState';
 import {
   Truck,
   Search,
@@ -18,7 +19,8 @@ import {
   Boxes,
   ShieldCheck,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Inbox
 } from 'lucide-react';
 
 interface RececaoModuleProps {
@@ -196,7 +198,7 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
 
           {/* Orders Scroll */}
           <div className="flex-1 overflow-y-auto">
-            {filteredOrders.map((ord) => (
+            {filteredOrders.length > 0 ? filteredOrders.map((ord) => (
               <button
                 key={ord.id}
                 onClick={() => setSelectedOrderId(ord.id)}
@@ -223,7 +225,14 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
                   {ord.linhas.length} linhas • {ord.linhas.reduce((sum, l) => sum + l.qtd_recebida_caixas, 0)}/{ord.linhas.reduce((sum, l) => sum + l.qtd_esperada_caixas, 0)} Cx
                 </div>
               </button>
-            ))}
+            )) : (
+              <EmptyState
+                icon={Inbox}
+                title="Sem receções"
+                description={statusFilter !== 'TODOS' ? `Nenhuma receção com status "${statusFilter}"` : 'Nenhuma receção disponível'}
+                compact
+              />
+            )}
           </div>
         </div>
 
