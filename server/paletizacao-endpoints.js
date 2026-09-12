@@ -143,30 +143,26 @@ export function setupPaletizacaoEndpoints(app, pool, verifyJWT, setEmpresaContex
         return res.status(400).json({ error: 'ssccOrigem array (min 2) e novoSSCC obrigatórios' });
       }
 
-      // Recuperar primeira palete para contexto
-      const primeiraResult = await req.dbClient.query(
-        'SELECT * FROM logistics.recepcao_palete WHERE sscc = $1',
-        [ssccOrigem[0]]
+      // 1 query para somar quantidades de todas as paletes de origem +
+      // recuperar contexto da primeira (substitui N+1: era 1 SELECT por
+      // SSCC apenas para somar).
+      const somaResult = await req.dbClient.query(
+        `SELECT
+           (array_agg(recepcao_id ORDER BY sscc = $2 DESC))[1] AS recepcao_id,
+           (array_agg(artigo_codigo ORDER BY sscc = $2 DESC))[1] AS artigo_codigo,
+           COALESCE(SUM(quantidade_caixas), 0) AS total_caixas,
+           COALESCE(SUM(quantidade_unidades), 0) AS total_unidades,
+           count(*) AS encontradas
+         FROM logistics.recepcao_palete
+         WHERE sscc = ANY($1)`,
+        [ssccOrigem, ssccOrigem[0]]
       );
 
-      if (primeiraResult.rows.length === 0) {
+      if (Number(somaResult.rows[0].encontradas) === 0) {
         return res.status(404).json({ error: 'Palete de origem não encontrada' });
       }
 
-      // Somar quantidades
-      let totalCaixas = 0;
-      let totalUnidades = 0;
-
-      for (const sscc of ssccOrigem) {
-        const result = await req.dbClient.query(
-          'SELECT quantidade_caixas, quantidade_unidades FROM logistics.recepcao_palete WHERE sscc = $1',
-          [sscc]
-        );
-        if (result.rows.length > 0) {
-          totalCaixas += result.rows[0].quantidade_caixas;
-          totalUnidades += result.rows[0].quantidade_unidades;
-        }
-      }
+      const { recepcao_id, artigo_codigo, total_caixas, total_unidades } = somaResult.rows[0];
 
       // Criar nova palete consolidada
       const consolidada = await req.dbClient.query(
@@ -174,25 +170,16 @@ export function setupPaletizacaoEndpoints(app, pool, verifyJWT, setEmpresaContex
          (sscc, recepcao_id, artigo_codigo, quantidade_caixas, quantidade_unidades, operador_criacao)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
-        [
-          novoSSCC,
-          primeiraResult.rows[0].recepcao_id,
-          primeiraResult.rows[0].artigo_codigo,
-          totalCaixas,
-          totalUnidades,
-          operador || 'SISTEMA',
-        ]
+        [novoSSCC, recepcao_id, artigo_codigo, total_caixas, total_unidades, operador || 'SISTEMA']
       );
 
-      // Registar movimentos
-      for (const sscc of ssccOrigem) {
-        await req.dbClient.query(
-          `INSERT INTO logistics.palete_movimento
-           (palete_sscc, evento, operador, observacoes)
-           VALUES ($1, $2, $3, $4)`,
-          [sscc, 'CONSOLIDADA', operador || 'SISTEMA', `Consolidada em ${novoSSCC}`]
-        );
-      }
+      // 1 bulk insert para todos os movimentos, em vez de 1 INSERT por SSCC
+      await req.dbClient.query(
+        `INSERT INTO logistics.palete_movimento (palete_sscc, evento, operador, observacoes)
+         SELECT sscc, 'CONSOLIDADA', $2, $3
+         FROM unnest($1::varchar[]) AS sscc`,
+        [ssccOrigem, operador || 'SISTEMA', `Consolidada em ${novoSSCC}`]
+      );
 
       res.json({ success: true, palete: consolidada.rows[0] });
     } catch (err) {

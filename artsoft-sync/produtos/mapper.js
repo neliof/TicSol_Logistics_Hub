@@ -145,8 +145,11 @@ export async function upsertProduto(client, empresaId, produto) {
 }
 
 /**
- * Processa um lote de produtos. Cada UPSERT é independente — um artigo com
- * problema não trava os restantes; os erros são recolhidos e devolvidos.
+ * Processa um lote de produtos com UPSERT em batch (1 round-trip para todo o
+ * lote, via unnest, em vez de 1 UPSERT por produto). A validação de cada
+ * item continua isolada em JS antes do batch — um artigo sem código, por
+ * exemplo, não impede os restantes de serem inseridos; só entra na lista de
+ * erros e não faz parte do array enviado ao Postgres.
  *
  * @param {object} client
  * @param {string} empresaId
@@ -158,19 +161,95 @@ export async function processarProdutos(client, empresaId, produtos) {
     return { processados: 0, criados: 0, atualizados: 0, erros: [] };
   }
 
-  let criados = 0;
-  let atualizados = 0;
   const erros = [];
+  const cols = {
+    sku: [],
+    ean: [],
+    descricao: [],
+    pesoLiq: [],
+    unidadesCaixa: [],
+    controlaLote: [],
+    controlaValidade: [],
+    extra: [],
+  };
 
   for (const produto of produtos) {
     try {
-      const { criado } = await upsertProduto(client, empresaId, produto);
-      if (criado) criados++;
-      else atualizados++;
+      const sku = String(produto?.codigo ?? "").trim();
+      if (!sku) {
+        throw new ErroMapperProduto("Produto sem código (sku_interno é obrigatório)");
+      }
+
+      const descricao = String(produto.descricao ?? "").trim() || sku;
+      const codOpcional = String(produto.ean ?? "").trim();
+      const ean = normalizarEan(codOpcional);
+      const pesoLiq = numeroOuNull(produto.peso_liquido);
+      const unidadesCaixa = inteiroOuNull(produto.unidades_por_caixa);
+      const controlaLote = flagParaBool(produto.controla_lote, true);
+      const controlaValidade = flagParaBool(produto.controla_validade, true);
+
+      const extra = { ...(produto.dados_extra || {}) };
+      if (codOpcional && !ean) extra.codigo_opcional = codOpcional;
+      if (produto.unidade) extra.unidade = String(produto.unidade).trim();
+      if (produto.peso_bruto != null && String(produto.peso_bruto).trim() !== "") {
+        extra.peso_bruto = numeroOuNull(produto.peso_bruto);
+      }
+      if (produto.dias_validade) extra.dias_validade = inteiroOuNull(produto.dias_validade);
+
+      cols.sku.push(sku);
+      cols.ean.push(ean);
+      cols.descricao.push(descricao);
+      cols.pesoLiq.push(pesoLiq);
+      cols.unidadesCaixa.push(unidadesCaixa);
+      cols.controlaLote.push(controlaLote);
+      cols.controlaValidade.push(controlaValidade);
+      cols.extra.push(JSON.stringify(extra));
     } catch (erro) {
       erros.push({ codigo: produto?.codigo ?? "(sem código)", erro: erro.message });
     }
   }
 
-  return { processados: criados + atualizados, criados, atualizados, erros };
+  if (cols.sku.length === 0) {
+    return { processados: 0, criados: 0, atualizados: 0, erros };
+  }
+
+  const res = await client.query(
+    `
+    INSERT INTO logistics.produto (
+      empresa_id, sku_interno, ean13, descricao,
+      peso_liquido_kg, unidades_por_caixa,
+      controla_lote, controla_validade, dimensoes_caixa_mm, updated_at
+    )
+    SELECT $1, * FROM unnest(
+      $2::varchar[], $3::varchar[], $4::text[], $5::numeric[],
+      $6::int[], $7::boolean[], $8::boolean[], $9::jsonb[]
+    ) AS t(sku_interno, ean13, descricao, peso_liquido_kg, unidades_por_caixa, controla_lote, controla_validade, dimensoes_caixa_mm)
+    ON CONFLICT (empresa_id, sku_interno) DO UPDATE SET
+      ean13 = EXCLUDED.ean13,
+      descricao = EXCLUDED.descricao,
+      peso_liquido_kg = EXCLUDED.peso_liquido_kg,
+      unidades_por_caixa = EXCLUDED.unidades_por_caixa,
+      controla_lote = EXCLUDED.controla_lote,
+      controla_validade = EXCLUDED.controla_validade,
+      dimensoes_caixa_mm = COALESCE(logistics.produto.dimensoes_caixa_mm, '{}'::jsonb) || EXCLUDED.dimensoes_caixa_mm,
+      updated_at = NOW()
+    RETURNING (xmax = 0) AS criado_novo
+    `,
+    [
+      empresaId,
+      cols.sku,
+      cols.ean,
+      cols.descricao,
+      cols.pesoLiq,
+      cols.unidadesCaixa,
+      cols.controlaLote,
+      cols.controlaValidade,
+      cols.extra,
+    ]
+  );
+
+  const criados = res.rows.filter((r) => r.criado_novo).length;
+  const atualizados = res.rows.length - criados;
+
+  return { processados: res.rows.length, criados, atualizados, erros };
 }

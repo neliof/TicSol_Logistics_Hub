@@ -193,6 +193,60 @@ async function upsertDocumento(client, empresaId, doc) {
  * @param {Array} linhas            linhas parseadas
  * @returns {Promise<number>}       número de linhas inseridas
  */
+/**
+ * Converte um número no formato ARTSOFT (vírgula decimal, possível milhar
+ * com ponto) para number. Devolve null se não for um número válido.
+ * @param {unknown} valor
+ * @returns {number|null}
+ */
+function parseNumeroArtsoft(valor) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const str = String(valor).trim();
+  if (str === "") return null;
+
+  const lastSepIdx = Math.max(str.lastIndexOf("."), str.lastIndexOf(","));
+  let normalizado = str;
+  if (lastSepIdx > -1) {
+    const digitsBefore = lastSepIdx;
+    if (digitsBefore <= 2) {
+      normalizado = str.substring(0, lastSepIdx).replace(/[.,]/g, "") + "." + str.substring(lastSepIdx + 1);
+    } else {
+      normalizado = str.replace(/\./g, "").replace(",", ".");
+    }
+  }
+
+  const num = Number.parseFloat(normalizado);
+  return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Converte uma data no formato ARTSOFT (várias variantes observadas:
+ * DDMMYYYY, YYYY-MM-DD, DD/MM/YYYY) para 'YYYY-MM-DD' ou null.
+ * @param {unknown} valor
+ * @returns {string|null}
+ */
+function parseDataArtsoft(valor) {
+  if (!valor) return null;
+  const str = String(valor).trim();
+  if (str === "") return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+
+  const comBarra = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (comBarra) {
+    const [, d, m, y] = comBarra;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  const compacto = str.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (compacto) {
+    const [, d, m, y] = compacto;
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
+}
+
 async function atualizarLinhas(client, empresaId, documento_id, linhas) {
   if (!linhas || !Array.isArray(linhas) || linhas.length === 0) {
     // Sem linhas — apagar as antigas
@@ -206,7 +260,8 @@ async function atualizarLinhas(client, empresaId, documento_id, linhas) {
   // EAN13 via correlação StkFch no pedido ARTSOFT vem sempre vazio (a
   // correlação não resolve nesta instalação); como produtos.sync já
   // populou logistics.produto com o EAN correto, resolve-se por aqui em
-  // vez de depender do ARTSOFT devolver o campo.
+  // vez de depender do ARTSOFT devolver o campo. Aproveita-se a mesma
+  // query em lote para resolver produto_id (nunca era feito antes).
   const codigosUnicos = [
     ...new Set(
       linhas
@@ -215,36 +270,50 @@ async function atualizarLinhas(client, empresaId, documento_id, linhas) {
     ),
   ];
   const eanPorCodigo = new Map();
+  const produtoIdPorCodigo = new Map();
   if (codigosUnicos.length > 0) {
     const res = await client.query(
-      `SELECT sku_interno, ean13 FROM logistics.produto WHERE empresa_id = $1 AND sku_interno = ANY($2)`,
+      `SELECT id, sku_interno, ean13 FROM logistics.produto WHERE empresa_id = $1 AND sku_interno = ANY($2)`,
       [empresaId, codigosUnicos]
     );
     for (const row of res.rows) {
       if (row.ean13) eanPorCodigo.set(row.sku_interno, row.ean13);
+      produtoIdPorCodigo.set(row.sku_interno, row.id);
     }
   }
 
-  // Transação: delete + bulk insert
-  const txRes = await client.query("BEGIN");
+  // Transação: delete + bulk insert (unnest — 1 round-trip em vez de N)
+  await client.query("BEGIN");
 
   try {
-    // Apagar antigas
     await client.query(
       "DELETE FROM logistics.linha_documento WHERE documento_id = $1",
       [documento_id]
     );
 
-    // Inserir novas. A tabela não tem colunas para nº de registo de artigo,
-    // peso ou EAN13 — esses vão em dados_extra.
-    const insert_sql = `
-      INSERT INTO logistics.linha_documento (
-        documento_id, nr_linha, nr_lancamento, artigo_codigo, descricao,
-        quantidade, unidade, observacoes, dados_extra
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `;
+    const cols = {
+      documento_id: [],
+      nr_linha: [],
+      nr_lancamento: [],
+      produto_id: [],
+      artigo_codigo: [],
+      descricao: [],
+      quantidade: [],
+      unidade: [],
+      observacoes: [],
+      valor_unitario: [],
+      iva_percentual: [],
+      desconto_percentual: [],
+      total_liquido: [],
+      lote: [],
+      data_validade: [],
+      dados_extra: [],
+    };
 
-    let inseridas = 0;
+    // Lotes a upsert em logistics.lote (só quando produto_id resolvido —
+    // a FK é NOT NULL, não há como registar lote de produto desconhecido)
+    const lotesParaUpsert = [];
+
     for (const linha of linhas) {
       const {
         nr_linha,
@@ -263,26 +332,110 @@ async function atualizarLinhas(client, empresaId, documento_id, linhas) {
       const codigo = String(artigo_codigo || "").trim();
       if (!codigo) continue; // artigo_codigo é NOT NULL
 
+      const produtoId = produtoIdPorCodigo.get(codigo) || null;
+
       const extra = { ...(dados_extra || {}) };
       if (artigo_nrreg) extra.artigo_nrreg = artigo_nrreg;
       if (peso) extra.peso = peso;
       const eanResolvido = ean13 || dados_extra?.ean13 || eanPorCodigo.get(codigo);
       if (eanResolvido) extra.ean13 = eanResolvido;
 
-      const quantidadeNum = Number.parseFloat(String(quantidade ?? ""));
+      const quantidadeNum = parseNumeroArtsoft(quantidade);
+      const valorUnitario = parseNumeroArtsoft(dados_extra?.valor_unitario);
+      const ivaPercentual = parseNumeroArtsoft(dados_extra?.iva);
+      const descontoPercentual = parseNumeroArtsoft(dados_extra?.desconto);
+      const totalLiquido = parseNumeroArtsoft(dados_extra?.total_liquido);
+      const lote = dados_extra?.lote ? String(dados_extra.lote).trim() || null : null;
+      const dataValidade = parseDataArtsoft(dados_extra?.data_validade);
 
-      await client.query(insert_sql, [
-        documento_id,
-        nr_linha ?? 0,
-        nr_lancamento || null,
-        codigo,
-        descricao || null,
-        Number.isFinite(quantidadeNum) ? quantidadeNum : null,
-        unidade || null,
-        observacoes || null,
-        Object.keys(extra).length > 0 ? JSON.stringify(extra) : null,
-      ]);
-      inseridas++;
+      // Estes 6 campos já ficaram promovidos a colunas próprias; deixam de
+      // ser necessários em dados_extra (evita duplicar a mesma informação
+      // em dois lugares e desatualizar um deles silenciosamente).
+      delete extra.valor_unitario;
+      delete extra.iva;
+      delete extra.desconto;
+      delete extra.total_liquido;
+      delete extra.lote;
+      delete extra.data_validade;
+
+      cols.documento_id.push(documento_id);
+      cols.nr_linha.push(nr_linha ?? 0);
+      cols.nr_lancamento.push(nr_lancamento || null);
+      cols.produto_id.push(produtoId);
+      cols.artigo_codigo.push(codigo);
+      cols.descricao.push(descricao || null);
+      cols.quantidade.push(quantidadeNum);
+      cols.unidade.push(unidade || null);
+      cols.observacoes.push(observacoes || null);
+      cols.valor_unitario.push(valorUnitario);
+      cols.iva_percentual.push(ivaPercentual);
+      cols.desconto_percentual.push(descontoPercentual);
+      cols.total_liquido.push(totalLiquido);
+      cols.lote.push(lote);
+      cols.data_validade.push(dataValidade);
+      cols.dados_extra.push(Object.keys(extra).length > 0 ? JSON.stringify(extra) : null);
+
+      if (produtoId && lote) {
+        lotesParaUpsert.push({ produtoId, lote, dataValidade });
+      }
+    }
+
+    const inseridas = cols.documento_id.length;
+
+    if (inseridas > 0) {
+      await client.query(
+        `
+        INSERT INTO logistics.linha_documento (
+          documento_id, nr_linha, nr_lancamento, produto_id, artigo_codigo,
+          descricao, quantidade, unidade, observacoes, valor_unitario,
+          iva_percentual, desconto_percentual, total_liquido, lote,
+          data_validade, dados_extra
+        )
+        SELECT * FROM unnest(
+          $1::uuid[], $2::int[], $3::int[], $4::uuid[], $5::varchar[],
+          $6::text[], $7::numeric[], $8::varchar[], $9::text[], $10::numeric[],
+          $11::numeric[], $12::numeric[], $13::numeric[], $14::varchar[],
+          $15::date[], $16::jsonb[]
+        )
+        `,
+        [
+          cols.documento_id,
+          cols.nr_linha,
+          cols.nr_lancamento,
+          cols.produto_id,
+          cols.artigo_codigo,
+          cols.descricao,
+          cols.quantidade,
+          cols.unidade,
+          cols.observacoes,
+          cols.valor_unitario,
+          cols.iva_percentual,
+          cols.desconto_percentual,
+          cols.total_liquido,
+          cols.lote,
+          cols.data_validade,
+          cols.dados_extra,
+        ]
+      );
+    }
+
+    // Popular logistics.lote (mestre) — upsert por (produto_id, numero_lote).
+    // Feito em lote (unnest) pela mesma razão do insert de linhas acima.
+    if (lotesParaUpsert.length > 0) {
+      const uniqueLotes = new Map();
+      for (const l of lotesParaUpsert) {
+        uniqueLotes.set(`${l.produtoId}::${l.lote}`, l);
+      }
+      const arr = [...uniqueLotes.values()];
+      await client.query(
+        `
+        INSERT INTO logistics.lote (produto_id, numero_lote, data_validade)
+        SELECT * FROM unnest($1::uuid[], $2::varchar[], $3::date[])
+        ON CONFLICT (produto_id, numero_lote)
+        DO UPDATE SET data_validade = COALESCE(EXCLUDED.data_validade, logistics.lote.data_validade)
+        `,
+        [arr.map((l) => l.produtoId), arr.map((l) => l.lote), arr.map((l) => l.dataValidade)]
+      );
     }
 
     await client.query("COMMIT");

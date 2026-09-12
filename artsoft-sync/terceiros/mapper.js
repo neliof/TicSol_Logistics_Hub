@@ -70,7 +70,10 @@ export async function upsertTerceiro(client, empresaId, tabela, terceiro) {
 }
 
 /**
- * Processa um lote de terceiros. Cada UPSERT é independente.
+ * Processa um lote de terceiros com UPSERT em batch (1 round-trip via
+ * unnest, em vez de 1 UPSERT por terceiro). Validação continua isolada por
+ * item em JS antes do batch, preservando o comportamento de "um terceiro
+ * malformado não trava os restantes".
  *
  * @param {object} client
  * @param {string} empresaId
@@ -79,23 +82,53 @@ export async function upsertTerceiro(client, empresaId, tabela, terceiro) {
  * @returns {Promise<{processados: number, criados: number, atualizados: number, erros: Array}>}
  */
 export async function processarTerceiros(client, empresaId, tabela, terceiros) {
+  if (tabela !== "cliente" && tabela !== "fornecedor") {
+    throw new ErroMapperTerceiro(`Tabela inválida: ${tabela}`);
+  }
   if (!Array.isArray(terceiros) || terceiros.length === 0) {
     return { processados: 0, criados: 0, atualizados: 0, erros: [] };
   }
 
-  let criados = 0;
-  let atualizados = 0;
   const erros = [];
+  const cols = { codigo: [], nome: [], nif: [], morada: [] };
 
   for (const t of terceiros) {
     try {
-      const { criado } = await upsertTerceiro(client, empresaId, tabela, t);
-      if (criado) criados++;
-      else atualizados++;
+      const codigo = String(t?.numero ?? "").trim();
+      if (!codigo) {
+        throw new ErroMapperTerceiro("Terceiro sem número (codigo_interno é obrigatório)");
+      }
+      cols.codigo.push(codigo);
+      cols.nome.push(String(t.nome ?? "").trim() || `(${tabela} ${codigo})`);
+      cols.nif.push(String(t.nif ?? "").trim() || null);
+      cols.morada.push(comporMorada(t));
     } catch (erro) {
       erros.push({ codigo: t?.numero ?? "(sem número)", erro: erro.message });
     }
   }
 
-  return { processados: criados + atualizados, criados, atualizados, erros };
+  if (cols.codigo.length === 0) {
+    return { processados: 0, criados: 0, atualizados: 0, erros };
+  }
+
+  // tabela vem só de uma whitelist validada acima ('cliente'|'fornecedor'),
+  // por isso a interpolação direta no nome da tabela é segura.
+  const res = await client.query(
+    `
+    INSERT INTO logistics.${tabela} (empresa_id, codigo_interno, nome, nif, morada)
+    SELECT $1, * FROM unnest($2::varchar[], $3::varchar[], $4::varchar[], $5::text[])
+      AS t(codigo_interno, nome, nif, morada)
+    ON CONFLICT (empresa_id, codigo_interno) DO UPDATE SET
+      nome = EXCLUDED.nome,
+      nif = EXCLUDED.nif,
+      morada = EXCLUDED.morada
+    RETURNING (xmax = 0) AS criado_novo
+    `,
+    [empresaId, cols.codigo, cols.nome, cols.nif, cols.morada]
+  );
+
+  const criados = res.rows.filter((r) => r.criado_novo).length;
+  const atualizados = res.rows.length - criados;
+
+  return { processados: res.rows.length, criados, atualizados, erros };
 }

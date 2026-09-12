@@ -70,32 +70,49 @@ export async function gravarSnapshot(client, empresaId, saldos, { origem = "rest
   }
 
   const dataSync = new Date();
-  let gravados = 0;
+  const codigos = [...saldos.keys()];
+
+  // 1 round-trip para resolver todos os códigos, em vez de 1 SELECT por
+  // código (era o principal N+1 do sync de stock).
+  const prod = await client.query(
+    `SELECT id, sku_interno FROM logistics.produto WHERE empresa_id = $1 AND sku_interno = ANY($2)`,
+    [empresaId, codigos]
+  );
+  const produtoIdPorCodigo = new Map(prod.rows.map((r) => [r.sku_interno, r.id]));
+
+  const produtoIds = [];
+  const quantidades = [];
   let naoResolvidos = 0;
 
   for (const [codigo, saldo] of saldos) {
-    const prod = await client.query(
-      `SELECT id FROM logistics.produto WHERE empresa_id = $1 AND sku_interno = $2 LIMIT 1`,
-      [empresaId, codigo]
-    );
-    if (prod.rows.length === 0) {
+    const produtoId = produtoIdPorCodigo.get(codigo);
+    if (!produtoId) {
       naoResolvidos++;
       continue;
     }
-
-    await client.query(
-      `
-      INSERT INTO logistics.artsoft_stock_snapshot (
-        empresa_id, produto_id, quantidade_artsoft, origem, data_sync
-      ) VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (empresa_id, produto_id, data_sync) DO UPDATE SET
-        quantidade_artsoft = EXCLUDED.quantidade_artsoft,
-        origem = EXCLUDED.origem
-      `,
-      [empresaId, prod.rows[0].id, saldo, origem, dataSync]
-    );
-    gravados++;
+    produtoIds.push(produtoId);
+    quantidades.push(saldo);
   }
 
-  return { gravados, nao_resolvidos: naoResolvidos };
+  if (produtoIds.length === 0) {
+    return { gravados: 0, nao_resolvidos: naoResolvidos };
+  }
+
+  // 1 round-trip para gravar todos os snapshots resolvidos, em vez de 1
+  // INSERT por produto.
+  await client.query(
+    `
+    INSERT INTO logistics.artsoft_stock_snapshot (
+      empresa_id, produto_id, quantidade_artsoft, origem, data_sync
+    )
+    SELECT $1, produto_id, quantidade_artsoft, $4, $5
+    FROM unnest($2::uuid[], $3::numeric[]) AS t(produto_id, quantidade_artsoft)
+    ON CONFLICT (empresa_id, produto_id, data_sync) DO UPDATE SET
+      quantidade_artsoft = EXCLUDED.quantidade_artsoft,
+      origem = EXCLUDED.origem
+    `,
+    [empresaId, produtoIds, quantidades, origem, dataSync]
+  );
+
+  return { gravados: produtoIds.length, nao_resolvidos: naoResolvidos };
 }
