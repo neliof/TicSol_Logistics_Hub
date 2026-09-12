@@ -1187,6 +1187,11 @@ const { setupStockEndpoints } = await import('./stock-endpoints.js')
 setupStockEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
 console.log('[STOCK] 6 endpoints registados com sucesso')
 
+// Setup P4 Expedição endpoints
+const { setupExpedicaoEndpoints } = await import('./expedicao-endpoints.js')
+setupExpedicaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[EXPEDICAO] 6 endpoints registados com sucesso')
+
 const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
 
