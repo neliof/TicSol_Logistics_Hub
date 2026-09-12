@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS logistics.recepcao (
   empresa_id UUID NOT NULL REFERENCES logistics.empresa(id) ON DELETE CASCADE,
   numero_guia VARCHAR(50) NOT NULL,
   numero_encomenda_artsoft VARCHAR(50),
-  fornecedor_id UUID REFERENCES logistics.terceiro(id),
+  fornecedor_id UUID REFERENCES logistics.fornecedor(id),
   fornecedor_nome VARCHAR(255) NOT NULL,
   estado VARCHAR(50) DEFAULT 'RASCUNHO' NOT NULL,
   operador_inicio VARCHAR(100),
