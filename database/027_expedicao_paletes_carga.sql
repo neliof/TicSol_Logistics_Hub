@@ -28,6 +28,13 @@ ALTER TABLE logistics.palete
 ALTER TABLE logistics.motorista
   ADD COLUMN IF NOT EXISTS contacto varchar(30);
 
+-- Sem UNIQUE, o upsert-por-nome de transportadora (usado quando o
+-- backend recebe texto livre em vez de um UUID já existente — ainda não
+-- há UI de seleção) criaria uma linha nova a cada carga em vez de
+-- reaproveitar a existente.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transportadora_empresa_nome
+  ON logistics.transportadora(empresa_id, nome);
+
 -- Dados reais de embarque (medidos na saída, podem diferir do estimado)
 -- e fecho do ciclo de entrega. Frontend: ComprovanteEmbarque.peso_real_kg,
 -- volume_real_m3, observacoes, data_entrega_real.

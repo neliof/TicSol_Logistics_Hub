@@ -141,6 +141,13 @@ export function setupExpedicaoPaletesEndpoints(app, pool, verifyJWT, setEmpresaC
         viatura_id,
         transportadora_id,
         motorista_id,
+        // Texto livre — usado quando ainda não há UI de seleção de
+        // entidades existentes; faz upsert por nome/matrícula em vez de
+        // exigir que o cliente já tenha o UUID.
+        transportadora_nome,
+        matricula_veiculo,
+        motorista_nome,
+        motorista_contacto,
         paletes_sscc, // array de SSCC a associar a esta carga
         operador_embarque,
       } = req.body
@@ -150,12 +157,47 @@ export function setupExpedicaoPaletesEndpoints(app, pool, verifyJWT, setEmpresaC
         return res.status(400).json({ error: 'armazem_id e paletes_sscc (array não vazio) obrigatórios' })
       }
 
+      let transportadoraId = transportadora_id || null
+      if (!transportadoraId && transportadora_nome) {
+        const t = await req.dbClient.query(
+          `INSERT INTO logistics.transportadora (empresa_id, nome)
+           VALUES ($1, $2)
+           ON CONFLICT (empresa_id, nome) DO UPDATE SET nome = EXCLUDED.nome
+           RETURNING id`,
+          [empresaId, transportadora_nome]
+        )
+        transportadoraId = t.rows[0].id
+      }
+
+      let viaturaId = viatura_id || null
+      if (!viaturaId && matricula_veiculo && transportadoraId) {
+        const v = await req.dbClient.query(
+          `INSERT INTO logistics.viatura (transportadora_id, matricula)
+           VALUES ($1, $2)
+           ON CONFLICT (transportadora_id, matricula) DO UPDATE SET matricula = EXCLUDED.matricula
+           RETURNING id`,
+          [transportadoraId, matricula_veiculo]
+        )
+        viaturaId = v.rows[0]?.id || null
+      }
+
+      let motoristaId = motorista_id || null
+      if (!motoristaId && motorista_nome) {
+        const m = await req.dbClient.query(
+          `INSERT INTO logistics.motorista (transportadora_id, nome, contacto)
+           VALUES ($1, $2, $3)
+           RETURNING id`,
+          [transportadoraId, motorista_nome, motorista_contacto || null]
+        )
+        motoristaId = m.rows[0].id
+      }
+
       const cargaResult = await req.dbClient.query(
         `INSERT INTO logistics.carga
          (empresa_id, armazem_id, viatura_id, transportadora_id, motorista_id, operador_embarque, data_hora_carga, estado)
          VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'carregada')
          RETURNING *`,
-        [empresaId, armazem_id, viatura_id || null, transportadora_id || null, motorista_id || null, operador_embarque || null]
+        [empresaId, armazem_id, viaturaId, transportadoraId, motoristaId, operador_embarque || null]
       )
       const carga = cargaResult.rows[0]
 
