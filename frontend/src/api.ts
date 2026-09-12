@@ -167,16 +167,16 @@ export const api = {
     return corpo.usuario;
   },
 
-  listarDocumentos(limite = 100) {
-    return pedir<any[]>(`/rest/v1/documento?limit=${limite}`);
+  listarDocumentos(limite = 100, offset = 0) {
+    return pedir<any[]>(`/rest/v1/documento?limit=${limite}&offset=${offset}`);
   },
 
   listarLinhasDoDocumento(documentoId: string) {
     return pedir<any[]>(`/rest/v1/documento/${documentoId}/linhas`);
   },
 
-  listarExecucoes(limite = 20) {
-    return pedir<ExecucaoSync[]>(`/rest/v1/sincronizacao_execucao?limit=${limite}`);
+  listarExecucoes(limite = 20, offset = 0) {
+    return pedir<ExecucaoSync[]>(`/rest/v1/sincronizacao_execucao?limit=${limite}&offset=${offset}`);
   },
 
   sincronizarGuias(dataInicio?: string, dataFim?: string, series?: string[]) {
@@ -194,16 +194,16 @@ export const api = {
     return pedir<SyncHealth>(`/health/sync/${empresaId}`);
   },
 
-  reconciliacaoStock(limite = 500) {
-    return pedir<LinhaReconciliacao[]>(`/rest/v1/vw_reconciliacao_stock?limit=${limite}`);
+  reconciliacaoStock(limite = 500, offset = 0) {
+    return pedir<LinhaReconciliacao[]>(`/rest/v1/vw_reconciliacao_stock?limit=${limite}&offset=${offset}`);
   },
 
-  paletes(limite = 500) {
-    return pedir<any[]>(`/rest/v1/palete?limit=${limite}`);
+  paletes(limite = 500, offset = 0) {
+    return pedir<any[]>(`/rest/v1/palete?limit=${limite}&offset=${offset}`);
   },
 
-  regras(limite = 100) {
-    return pedir<any[]>(`/rest/v1/regra_logistica?limit=${limite}`);
+  regras(limite = 100, offset = 0) {
+    return pedir<any[]>(`/rest/v1/regra_logistica?limit=${limite}&offset=${offset}`);
   },
 
   sincronizarStock() {
@@ -425,5 +425,73 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
+  },
+
+  // --- Stock (P3) ---
+
+  stockFefo(limite = 100, offset = 0) {
+    return pedir<{ success: boolean; lotes: any[]; limit: number; offset: number }>(
+      `/rest/v1/stock/lotes/fefo?limit=${limite}&offset=${offset}`
+    );
+  },
+
+  stockLocalizacoes(limite = 100, offset = 0) {
+    return pedir<{ success: boolean; localizacoes: any[]; limit: number; offset: number }>(
+      `/rest/v1/stock/localizacoes?limit=${limite}&offset=${offset}`
+    );
+  },
+
+  stockDivergencias(limite = 50, offset = 0) {
+    return pedir<{ success: boolean; divergencias: any[]; limit: number; offset: number }>(
+      `/rest/v1/stock/divergencias?limit=${limite}&offset=${offset}`
+    );
+  },
+
+  reconciliarStock(payload: { recepcao_id: string; items: any[]; operador?: string }) {
+    return pedir<{ success: boolean; reconciliacao: any }>('/rest/v1/stock/reconciliar', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  atualizarStatusLote(id: string, novo_status: 'OK' | 'QUARENTENA' | 'BLOQUEADO' | 'CONSUMIDO') {
+    return pedir<{ success: boolean; lote: any }>(`/rest/v1/stock/lote/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ novo_status }),
+    });
+  },
+
+  criarAlertaStock(payload: {
+    tipo: string;
+    descricao: string;
+    severidade?: 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA';
+    artigo_codigo?: string;
+    quantidade?: number;
+    operador?: string;
+  }) {
+    return pedir<{ success: boolean; alerta: any }>('/rest/v1/stock/alerta', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // --- Paletização (P2) / Localização ---
+
+  paletesDisponiveis(limite = 100, offset = 0) {
+    return pedir<{ success: boolean; paletes: any[]; limit: number; offset: number }>(
+      `/rest/v1/palete/disponivel?limit=${limite}&offset=${offset}`
+    );
+  },
+
+  localizacaoSugerida(tipo = 'picking', limite = 5) {
+    return pedir<{ success: boolean; sugestoes: any[] }>(
+      `/rest/v1/localizacao/sugerida?tipo=${encodeURIComponent(tipo)}&limit=${limite}`
+    );
+  },
+
+  localizacaoDisponivel(limite = 100, offset = 0) {
+    return pedir<{ success: boolean; disponveis: string[] }>(
+      `/rest/v1/localizacao/disponivel?limit=${limite}&offset=${offset}`
+    );
   },
 };

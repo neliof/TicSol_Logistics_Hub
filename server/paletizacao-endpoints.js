@@ -276,15 +276,19 @@ export function setupPaletizacaoEndpoints(app, pool, verifyJWT, setEmpresaContex
   // 8. GET /rest/v1/palete/disponivel — Paletes disponíveis
   app.get('/rest/v1/palete/disponivel', verifyJWT, setEmpresaContext, async (req, res) => {
     try {
+      const limite = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+      const offset = parseInt(req.query.offset, 10) || 0;
+
       const result = await req.dbClient.query(
         `SELECT sscc, artigo_codigo, quantidade_caixas, localizacao_confirmada
          FROM logistics.recepcao_palete
          WHERE localizacao_confirmada IS NOT NULL
          ORDER BY atualizado_em DESC
-         LIMIT 100`
+         LIMIT $1 OFFSET $2`,
+        [limite, offset]
       );
 
-      res.json({ success: true, paletes: result.rows });
+      res.json({ success: true, paletes: result.rows, limit: limite, offset });
     } catch (err) {
       console.error('GET /rest/v1/palete/disponivel error:', err.message);
       res.status(400).json({ error: err.message });
