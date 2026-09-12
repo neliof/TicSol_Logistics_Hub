@@ -385,8 +385,8 @@ export async function sincronizarGuias(client, empresaId, { logger = () => {}, d
 
     logger(`[${correlationId}] Sincronização concluída.`);
     return {
-      docs_criados: resultMapper.processados,
-      docs_atualizados: 0, // TODO: contar criados vs. atualizados
+      docs_criados: resultMapper.criados,
+      docs_atualizados: resultMapper.atualizados,
       linhas_total: resultMapper.linhas_total,
       erros: resultMapper.erros,
       ultima_execucao: {

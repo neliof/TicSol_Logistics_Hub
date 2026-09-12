@@ -6,7 +6,7 @@
  */
 
 import cron from 'node-cron'
-import { sincronizarGuias } from '../../artsoft-sync/guias/sync.js'
+import { sincronizarGuiasIncremental } from '../../artsoft-sync/guias/sync-incremental.js'
 import { sincronizarProdutos } from '../../artsoft-sync/produtos/sync.js'
 import { sincronizarTerceiros } from '../../artsoft-sync/terceiros/sync.js'
 import { sincronizarStock } from '../../artsoft-sync/stock/sync.js'
@@ -166,8 +166,13 @@ export class SyncGuiasJob {
         console.error(`[SYNC-JOB:${id}] ${nome}: ✗ stock: ${errStock.message}`)
       }
 
-      const resultado = await sincronizarGuias(client, id, {
+      // Incremental: só reimporta desde a última sincronização com sucesso
+      // (com retry/backoff embutido); cai para full sync automaticamente na
+      // primeira execução ou se a marca ainda não existir.
+      const resultado = await sincronizarGuiasIncremental(client, id, {
         logger: (msg) => console.log(`[SYNC-JOB:${id}] ${msg}`),
+        maxTentativas: 3,
+        esperaBaseMs: 2000,
       })
 
       console.log(

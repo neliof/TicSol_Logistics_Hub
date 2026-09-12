@@ -106,31 +106,74 @@ export function construirFiltroIncremental(filtroBase, ultima, formato = 'ddmmaa
  * @param {object} options
  * @returns {Promise<resultado>}
  */
+// Estados de sincronizacao_execucao que representam sucesso (ver CHECK em
+// database/07_guias_transporte.sql). 'completo' NUNCA é produzido pelo sync
+// real — comparar contra esse valor fazia a marca de incremental nunca
+// avançar, mesmo quando tudo corria bem.
+const ESTADOS_SUCESSO = ['ok']
+
+/**
+ * Sincroniza com retry e backoff exponencial. Cada tentativa falhada espera
+ * o dobro da anterior antes de repetir (1s, 2s, 4s por default).
+ *
+ * @param {() => Promise<object>} tentativa
+ * @param {object} opcoes
+ * @param {number} [opcoes.maxTentativas=3]
+ * @param {number} [opcoes.esperaBaseMs=1000]
+ * @param {(msg: string) => void} [opcoes.logger]
+ * @returns {Promise<object>}
+ */
+async function comRetry(tentativa, { maxTentativas = 3, esperaBaseMs = 1000, logger = () => {} } = {}) {
+  let ultimoErro
+  for (let i = 1; i <= maxTentativas; i++) {
+    try {
+      return await tentativa()
+    } catch (erro) {
+      ultimoErro = erro
+      if (i < maxTentativas) {
+        const espera = esperaBaseMs * 2 ** (i - 1)
+        logger(`Tentativa ${i}/${maxTentativas} falhou (${erro.message}). Nova tentativa em ${espera}ms…`)
+        await new Promise((resolve) => setTimeout(resolve, espera))
+      }
+    }
+  }
+  throw ultimoErro
+}
+
 export async function sincronizarGuiasIncremental(client, empresaId, options = {}) {
   const { sincronizarGuias } = await import('./sync.js')
   const logger = options.logger || (() => {})
+  const inicioExecucao = new Date()
 
   logger('Verificando última sincronização…')
   const ultima = await obterUltimaSincronizacao(client, empresaId)
 
+  const syncOptions = { ...options }
+
   if (ultima) {
     const diasDesde = Math.floor((Date.now() - ultima.getTime()) / (1000 * 60 * 60 * 24))
     logger(`Última sincronização: ${ultima.toISOString()} (${diasDesde} dias atrás)`)
-    logger('Modo: incremental (apenas novos/modificados)')
+    logger('Modo: incremental (apenas desde a última sincronização com sucesso)')
+    // Liga de facto o filtro incremental — antes a data nunca era passada
+    // para sincronizarGuias, que fazia sempre o full sync de dias_retroativos
+    // mesmo quando havia uma marca de sincronização recente.
+    syncOptions.dataInicio = ultima
+    syncOptions.dataFim = inicioExecucao
   } else {
-    logger('Nenhuma sincronização anterior → Modo: full sync')
+    logger('Nenhuma sincronização anterior → Modo: full sync (janela de dias_retroativos)')
   }
 
-  // Executar sync (com override de filtro? não — deixar ARTSOFT decidir)
-  // Implementação futura: passar ultima para sincronizarGuias para override
-  const resultado = await sincronizarGuias(client, empresaId, options)
+  const resultado = await comRetry(() => sincronizarGuias(client, empresaId, syncOptions), {
+    maxTentativas: options.maxTentativas ?? 3,
+    esperaBaseMs: options.esperaBaseMs ?? 1000,
+    logger,
+  })
 
-  // Se completo, atualizar marca
-  if (resultado.ultima_execucao.estado === 'completo') {
+  if (ESTADOS_SUCESSO.includes(resultado.ultima_execucao.estado)) {
     logger('Atualizando marca de última sincronização…')
-    await atualizarUltimaSincronizacao(client, empresaId, new Date())
+    await atualizarUltimaSincronizacao(client, empresaId, inicioExecucao)
   } else {
-    logger('Sync incompleto → Não atualizar marca (retry próxima vez)')
+    logger(`Sync com estado '${resultado.ultima_execucao.estado}' → não atualizar marca (retry na próxima execução)`)
   }
 
   return resultado

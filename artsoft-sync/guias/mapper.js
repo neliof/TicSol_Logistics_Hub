@@ -490,18 +490,22 @@ export async function processarDocumento(client, empresaId, doc, correlationId =
  */
 export async function processarDocumentos(client, empresaId, documentos, correlationId = null) {
   if (!documentos || !Array.isArray(documentos) || documentos.length === 0) {
-    return { processados: 0, erros: [], linhas_total: 0 };
+    return { processados: 0, criados: 0, atualizados: 0, erros: [], linhas_total: 0 };
   }
 
   const resultados = [];
   const erros = [];
   let linhas_total = 0;
+  let criados = 0;
+  let atualizados = 0;
 
   for (const doc of documentos) {
     try {
       const res = await processarDocumento(client, empresaId, doc, correlationId);
       resultados.push(res);
       linhas_total += res.linhas_inseridas;
+      if (res.criado) criados++;
+      else atualizados++;
     } catch (erro) {
       erros.push({
         doc_id: `${doc.serie}/${doc.numero}`,
@@ -512,6 +516,8 @@ export async function processarDocumentos(client, empresaId, documentos, correla
 
   return {
     processados: resultados.length,
+    criados,
+    atualizados,
     erros,
     linhas_total,
   };
