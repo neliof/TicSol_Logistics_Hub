@@ -28,7 +28,10 @@ export function setupExpedicaoPaletesEndpoints(app, pool, verifyJWT, setEmpresaC
         ti,
         hi,
         operador_id,
-        produtos, // [{ produto_id, lote_id?, quantidade, peso_real_kg? }]
+        // [{ produto_id?, artigo_codigo?, lote_id?, lote?, data_validade?, quantidade, peso_real_kg? }]
+        // A UI atual (ExpedicaoPaletizacaoModule) só conhece artigo_codigo/lote
+        // (strings do ARTSOFT), não os UUIDs internos — resolvidos aqui.
+        produtos,
       } = req.body
       const empresaId = req.user?.empresa_id
 
@@ -37,6 +40,25 @@ export function setupExpedicaoPaletesEndpoints(app, pool, verifyJWT, setEmpresaC
       }
       if (temperatura_zona && !['AMBIENTE', 'FRESCO', 'CONGELADO'].includes(temperatura_zona)) {
         return res.status(400).json({ error: 'temperatura_zona inválida' })
+      }
+      if (produtos.some((p) => !p.produto_id && !p.artigo_codigo)) {
+        return res.status(400).json({ error: 'cada produto precisa de produto_id ou artigo_codigo' })
+      }
+
+      // Resolver artigo_codigo -> produto_id em lote (mesmo padrão usado em
+      // artsoft-sync/guias/mapper.js)
+      const codigosPorResolver = [...new Set(produtos.filter((p) => !p.produto_id).map((p) => p.artigo_codigo))]
+      const produtoIdPorCodigo = new Map()
+      if (codigosPorResolver.length > 0) {
+        const resolvidos = await req.dbClient.query(
+          `SELECT id, sku_interno FROM logistics.produto WHERE empresa_id = $1 AND sku_interno = ANY($2)`,
+          [empresaId, codigosPorResolver]
+        )
+        for (const row of resolvidos.rows) produtoIdPorCodigo.set(row.sku_interno, row.id)
+        const naoResolvidos = codigosPorResolver.filter((c) => !produtoIdPorCodigo.has(c))
+        if (naoResolvidos.length > 0) {
+          return res.status(422).json({ error: `Artigo(s) não encontrado(s) em logistics.produto: ${naoResolvidos.join(', ')}` })
+        }
       }
 
       const ssccResult = await req.dbClient.query('SELECT logistics.gerar_sscc($1) AS sscc', [empresaId])
@@ -56,9 +78,34 @@ export function setupExpedicaoPaletesEndpoints(app, pool, verifyJWT, setEmpresaC
       )
       const palete = paleteResult.rows[0]
 
+      // Resolver lote (string) -> lote_id por produto, criando o lote se
+      // ainda não existir (mesma lógica de 023_promover_campos_linha_documento).
+      const loteIdResolvido = new Map() // chave: `${produto_id}::${lote}`
+      for (const p of produtos) {
+        const produtoId = p.produto_id || produtoIdPorCodigo.get(p.artigo_codigo)
+        if (!p.lote_id && p.lote) {
+          const chave = `${produtoId}::${p.lote}`
+          if (!loteIdResolvido.has(chave)) {
+            const loteResult = await req.dbClient.query(
+              `INSERT INTO logistics.lote (produto_id, numero_lote, data_validade)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (produto_id, numero_lote) DO UPDATE SET data_validade = COALESCE(EXCLUDED.data_validade, logistics.lote.data_validade)
+               RETURNING id`,
+              [produtoId, p.lote, p.data_validade || null]
+            )
+            loteIdResolvido.set(chave, loteResult.rows[0].id)
+          }
+        }
+      }
+
       // Bulk insert das caixas (produtos) da palete via unnest — 1 round-trip
-      const produtoIds = produtos.map((p) => p.produto_id)
-      const loteIds = produtos.map((p) => p.lote_id || null)
+      const produtoIds = produtos.map((p) => p.produto_id || produtoIdPorCodigo.get(p.artigo_codigo))
+      const loteIds = produtos.map((p) => {
+        if (p.lote_id) return p.lote_id
+        if (!p.lote) return null
+        const produtoId = p.produto_id || produtoIdPorCodigo.get(p.artigo_codigo)
+        return loteIdResolvido.get(`${produtoId}::${p.lote}`) || null
+      })
       const quantidades = produtos.map((p) => p.quantidade)
       const pesos = produtos.map((p) => p.peso_real_kg || null)
 
