@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ReceivingOrder, ReceivingLine, PalletSSCC } from '../types/wms';
+import { ReceivingOrder, ReceivingLine } from '../types/wms';
 import {
   RecepcaoDocument,
   DivergenceRecord,
@@ -11,12 +11,14 @@ import {
   LoteRegistado,
   ResultadoRecepcao,
 } from '../types/rececao';
+import { api } from '../api';
 
 /**
- * Hook para gerir estado completo da receção
- * Responsável por: conferência, divergências, documentos, lotes, paletização, integração
+ * Hook para gerir estado da receção, persistido no backend
+ * (POST/PATCH /rest/v1/recepcao/*). Responsável por: criação, conferência,
+ * divergências, documentos, lotes, validação, finalização e integração ArtSoft.
  */
-export function useRecepcao(recepcao_id?: string) {
+export function useRecepcao() {
   // Estado principal
   const [recepcao, setRecepcao] = useState<RecepcaoCompleta | null>(null);
   const [documento, setDocumento] = useState<RecepcaoDocument | null>(null);
@@ -25,45 +27,78 @@ export function useRecepcao(recepcao_id?: string) {
   const [lotes, setLotes] = useState<Map<string, LoteRegistado[]>>(new Map());
   const [integracao, setIntegracao] = useState<ArtsoftIntegration | null>(null);
   const [auditoria, setAuditoria] = useState<AuditRecord[]>([]);
+  const [validacao, setValidacao] = useState<RecepcaoValidacao | null>(null);
 
   // Loading / Error
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Criar nova receção
+  const recarregarValidacao = useCallback(async (recepcaoId: string) => {
+    try {
+      const resp = await api.validarRecepcao(recepcaoId);
+      setValidacao(resp.validacao);
+    } catch (err) {
+      // Falha ao validar não deve bloquear o resto do fluxo; regista o erro
+      // mas mantém a última validação conhecida em vez de a apagar.
+      console.error('Erro ao validar receção:', err);
+    }
+  }, []);
+
+  const recarregarAuditoria = useCallback(async (recepcaoId: string) => {
+    try {
+      const resp = await api.auditoriaRecepcao(recepcaoId);
+      setAuditoria(resp.auditoria as AuditRecord[]);
+    } catch (err) {
+      console.error('Erro ao carregar auditoria:', err);
+    }
+  }, []);
+
+  // Criar nova receção — persiste no backend (POST /rest/v1/recepcao)
   const criarRecepcao = useCallback(
     async (ordem: ReceivingOrder, operador: string): Promise<ResultadoRecepcao> => {
       setLoading(true);
       setError(null);
       try {
-        // TODO: POST /rest/v1/recepcao com ordem_id
-        const novaRecepcao: RecepcaoCompleta = {
-          id: `REC-${Date.now()}`,
+        const resp = await api.criarRecepcao({
           numero_guia: ordem.numero_guia,
           numero_encomenda_artsoft: ordem.numero_encomenda_artsoft,
           fornecedor_nome: ordem.fornecedor_nome,
+          operador_inicio: operador,
+        });
+
+        const row = resp.recepcao;
+        const novaRecepcao: RecepcaoCompleta = {
+          id: row.id,
+          numero_guia: row.numero_guia,
+          numero_encomenda_artsoft: row.numero_encomenda_artsoft,
+          fornecedor_nome: row.fornecedor_nome,
           divergencias: [],
           estado: {
-            recepcao_id: `REC-${Date.now()}`,
-            estado_atual: 'RASCUNHO',
-            transicao_em: new Date().toISOString(),
+            recepcao_id: row.id,
+            estado_atual: row.estado,
+            transicao_em: row.criado_em,
             operador,
           },
           paletasAssociadas: [],
           auditoria: [],
-          criado_em: new Date().toISOString(),
-          atualizado_em: new Date().toISOString(),
+          criado_em: row.criado_em,
+          atualizado_em: row.atualizado_em,
         };
 
         setRecepcao(novaRecepcao);
         setEstado(novaRecepcao.estado);
-        registarAuditoria(novaRecepcao.id, 'CRIAR_RECEPCAO', 'recepcao', novaRecepcao.id, null, novaRecepcao, operador);
+        setDocumento(null);
+        setDivergencias([]);
+        setLotes(new Map());
+        setValidacao(null);
+        setAuditoria([]);
+        await recarregarValidacao(row.id);
 
         return {
-          recepcao_id: novaRecepcao.id,
-          estado: 'RASCUNHO',
-          numero_guia: ordem.numero_guia,
-          criado_em: novaRecepcao.criado_em,
+          recepcao_id: row.id,
+          estado: row.estado,
+          numero_guia: row.numero_guia,
+          criado_em: row.criado_em,
           sucesso: true,
         };
       } catch (err) {
@@ -74,67 +109,58 @@ export function useRecepcao(recepcao_id?: string) {
         setLoading(false);
       }
     },
-    []
+    [recarregarValidacao]
   );
 
-  // Registar documento
+  // Registar documento — POST /rest/v1/recepcao/:id/documento
   const registarDocumento = useCallback(
-    (tipo: string, numero: string, data: string, operador: string, url_anexo?: string) => {
-      if (!recepcao) return;
+    async (tipo: string, numero: string, data: string, operador: string, url_anexo?: string) => {
+      if (!recepcao) {
+        setError('Nenhuma receção ativa para registar documento');
+        return;
+      }
 
-      const doc: RecepcaoDocument = {
-        id: `DOC-${Date.now()}`,
-        recepcao_id: recepcao.id,
-        tipo: tipo as any,
-        numero,
-        data,
-        url_anexo,
-        criado_em: new Date().toISOString(),
-        operador,
-      };
-
-      setDocumento(doc);
-      registarAuditoria(recepcao.id, 'REGISTAR_DOCUMENTO', 'recepcao_documento', doc.id, null, doc, operador);
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await api.registarDocumentoRecepcao(recepcao.id, { tipo, numero, data, operador, url_anexo });
+        setDocumento(resp.documento as RecepcaoDocument);
+        await recarregarValidacao(recepcao.id);
+        await recarregarAuditoria(recepcao.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao registar documento');
+      } finally {
+        setLoading(false);
+      }
     },
-    [recepcao]
+    [recepcao, recarregarValidacao, recarregarAuditoria]
   );
 
-  // Conferir linha
+  // Conferir linha (local — a persistência da linha em si é feita pelo
+  // caller via onUpdateOrders; aqui só disparamos divergência se aplicável)
   const conferirLinha = useCallback(
     (linha: ReceivingLine, qtd_recebida: number, danificados: number, operador: string) => {
       if (!recepcao) return;
 
       const diferenca = qtd_recebida - linha.qtd_esperada_caixas;
-      const linhaAtualizada = { ...linha, qtd_recebida_caixas: qtd_recebida, danificados_caixas: danificados };
 
-      // Se houver diferença, registar automaticamente divergência
       if (diferenca !== 0 || danificados > 0) {
         const tipo = diferenca < 0 ? 'FALTA' : diferenca > 0 ? 'EXCESSO' : 'DANIFICADO';
         registarDivergencia(
           linha.id,
           tipo,
           Math.abs(diferenca) || danificados,
-          `Diferença de ${Math.abs(diferenca)} boxes${danificados > 0 ? ` + ${danificados} danificados` : ''}`,
+          `Diferença de ${Math.abs(diferenca)} caixas${danificados > 0 ? ` + ${danificados} danificados` : ''}`,
           operador
         );
       }
-
-      registarAuditoria(
-        recepcao.id,
-        'CONFERIR_LINHA',
-        'receiving_line',
-        linha.id,
-        { qtd_recebida_caixas: linha.qtd_recebida_caixas },
-        { qtd_recebida_caixas: qtd_recebida, danificados_caixas: danificados },
-        operador
-      );
     },
-    [recepcao]
+    [recepcao] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Registar divergência
+  // Registar divergência — POST /rest/v1/recepcao/:id/divergencia
   const registarDivergencia = useCallback(
-    (
+    async (
       linha_id: string,
       tipo: 'FALTA' | 'EXCESSO' | 'DANIFICADO' | 'NAO_ENCOMENDADO' | 'QUALIDADE',
       quantidade: number,
@@ -142,158 +168,111 @@ export function useRecepcao(recepcao_id?: string) {
       operador: string,
       impacto: 'ACEITAR' | 'REJEITAR' | 'REVISAR' = 'REVISAR'
     ) => {
-      if (!recepcao) return;
+      if (!recepcao) {
+        setError('Nenhuma receção ativa para registar divergência');
+        return;
+      }
 
-      const divergencia: DivergenceRecord = {
-        id: `DIV-${Date.now()}`,
-        linha_id,
-        recepcao_id: recepcao.id,
-        tipo,
-        quantidade,
-        motivo,
-        impacto_entrada_artsoft: impacto,
-        criado_em: new Date().toISOString(),
-        operador,
-      };
-
-      setDivergencias((prev) => [...prev, divergencia]);
-      registarAuditoria(recepcao.id, 'REGISTAR_DIVERGENCIA', 'divergencia_record', divergencia.id, null, divergencia, operador);
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await api.registarDivergenciaRecepcao(recepcao.id, {
+          linha_id,
+          tipo,
+          quantidade,
+          motivo,
+          operador,
+          impacto_entrada_artsoft: impacto,
+        });
+        setDivergencias((prev) => [...prev, resp.divergencia as DivergenceRecord]);
+        await recarregarValidacao(recepcao.id);
+        await recarregarAuditoria(recepcao.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao registar divergência');
+      } finally {
+        setLoading(false);
+      }
     },
-    [recepcao]
+    [recepcao, recarregarValidacao, recarregarAuditoria]
   );
 
-  // Registar lotes
+  // Registar lotes — POST /rest/v1/recepcao/:id/lote (um pedido por lote)
   const registarLotes = useCallback(
-    (linha_id: string, novosLotes: LoteRegistado[], operador: string) => {
-      if (!recepcao) return;
+    async (linha_id: string, novosLotes: LoteRegistado[], operador: string) => {
+      if (!recepcao) {
+        setError('Nenhuma receção ativa para registar lotes');
+        return;
+      }
 
-      const lotesAtuais = lotes.get(linha_id) || [];
-      const lotesNovosMapa = new Map(lotes);
-      lotesNovosMapa.set(linha_id, novosLotes);
-      setLotes(lotesNovosMapa);
+      setLoading(true);
+      setError(null);
+      try {
+        for (const lote of novosLotes) {
+          await api.registarLoteRecepcao(recepcao.id, {
+            linha_id,
+            lote: lote.lote,
+            quantidade: lote.quantidade,
+            data_validade: lote.data_validade,
+            vida_util_dias: lote.vida_util_dias,
+          });
+        }
 
-      registarAuditoria(
-        recepcao.id,
-        'REGISTAR_LOTES',
-        'lote_registado',
-        linha_id,
-        { lotes: lotesAtuais },
-        { lotes: novosLotes },
-        operador
-      );
+        setLotes((prev) => {
+          const novoMapa = new Map(prev);
+          novoMapa.set(linha_id, novosLotes);
+          return novoMapa;
+        });
+
+        await recarregarValidacao(recepcao.id);
+        await recarregarAuditoria(recepcao.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao registar lotes');
+      } finally {
+        setLoading(false);
+      }
     },
-    [recepcao, lotes]
+    [recepcao, recarregarValidacao, recarregarAuditoria]
   );
 
-  // Registar auditoria
-  const registarAuditoria = useCallback(
-    (
-      recepcao_id: string,
-      acao: string,
-      tabela_afetada: string,
-      registro_id: string,
-      valor_anterior: any,
-      valor_novo: any,
-      operador: string
-    ) => {
-      const auditEntry: AuditRecord = {
-        id: `AUD-${Date.now()}`,
-        recepcao_id,
-        operador,
-        acao,
-        tabela_afetada,
-        registro_id,
-        valor_anterior,
-        valor_novo,
-        criado_em: new Date().toISOString(),
-      };
-
-      setAuditoria((prev) => [...prev, auditEntry]);
-    },
-    []
-  );
-
-  // Validar receção
+  // Devolve a última validação conhecida (carregada via recarregarValidacao,
+  // que corre automaticamente após criar receção e após cada ação relevante).
   const validarRecepcao = useCallback((): RecepcaoValidacao => {
-    if (!recepcao) {
-      return {
-        documento_registado: false,
-        linhas_conferidas: false,
-        linhas_completas: { total: 0, conferidas: 0 },
-        divergencias_nao_resolvidas: 0,
-        lotes_obrigatorios_registados: false,
-        localizacoes_definidas: false,
-        paletes_criadas: 0,
-        alertas: ['Receção não inicializada'],
-        erros: ['Receção não inicializada'],
-        valido: false,
-      };
-    }
-
-    const erros: string[] = [];
-    const alertas: string[] = [];
-
-    // Validação 1: Documento
-    if (!documento) {
-      erros.push('Documento do fornecedor não registado');
-    }
-
-    // Validação 2: Linhas conferidas
-    // TODO: Verificar em recepcao.linhas
-
-    // Validação 3: Divergências resolvidas
-    const divergenciasNaoResolvidas = divergencias.filter((d) => d.impacto_entrada_artsoft === 'REVISAR').length;
-    if (divergenciasNaoResolvidas > 0) {
-      alertas.push(`${divergenciasNaoResolvidas} divergências aguardam resolução`);
-    }
-
-    // Validação 4: Lotes obrigatórios
-    // TODO: Verificar regras de lote por artigo
-
-    // Validação 5: Localizações
-    // TODO: Verificar se paletes têm localização
-
-    // Validação 6: Paletes
-    // TODO: Contar paletes criadas
-
+    if (validacao) return validacao;
     return {
-      documento_registado: !!documento,
-      linhas_conferidas: true, // TODO
-      linhas_completas: { total: 0, conferidas: 0 }, // TODO
-      divergencias_nao_resolvidas: divergenciasNaoResolvidas,
-      lotes_obrigatorios_registados: true, // TODO
-      localizacoes_definidas: true, // TODO
-      paletes_criadas: 0, // TODO
-      alertas,
-      erros,
-      valido: erros.length === 0,
+      documento_registado: false,
+      linhas_conferidas: false,
+      linhas_completas: { total: 0, conferidas: 0 },
+      divergencias_nao_resolvidas: 0,
+      lotes_obrigatorios_registados: false,
+      localizacoes_definidas: false,
+      paletes_criadas: 0,
+      alertas: [],
+      erros: recepcao ? ['A validar...'] : ['Receção não inicializada'],
+      valido: false,
     };
-  }, [recepcao, documento, divergencias]);
+  }, [validacao, recepcao]);
 
-  // Finalizar receção
+  // Finalizar receção — POST /rest/v1/recepcao/:id/finalizar (backend
+  // valida documento + localizações antes de aceitar; erros 409 chegam aqui)
   const finalizarRecepcao = useCallback(
     async (operador: string): Promise<boolean> => {
-      if (!recepcao) return false;
-
-      const validacao = validarRecepcao();
-      if (!validacao.valido) {
-        setError(`Receção inválida: ${validacao.erros.join(', ')}`);
+      if (!recepcao) {
+        setError('Nenhuma receção ativa para finalizar');
         return false;
       }
 
       setLoading(true);
+      setError(null);
       try {
-        // TODO: PATCH /rest/v1/recepcao/{id} com estado=CONCLUIDA
+        const resp = await api.finalizarRecepcao(recepcao.id, operador);
         const estadoAtualizado: RecepcaoState = {
-          ...estado!,
-          estado_atual: 'CONCLUIDA',
-          transicao_em: new Date().toISOString(),
+          recepcao_id: recepcao.id,
+          estado_atual: resp.recepcao.estado,
+          transicao_em: resp.recepcao.atualizado_em,
           operador,
         };
-
         setEstado(estadoAtualizado);
-        registarAuditoria(recepcao.id, 'FINALIZAR_RECEPCAO', 'recepcao', recepcao.id, { estado_atual: estado?.estado_atual }, { estado_atual: 'CONCLUIDA' }, operador);
-
+        await recarregarAuditoria(recepcao.id);
         return true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro ao finalizar receção';
@@ -303,8 +282,50 @@ export function useRecepcao(recepcao_id?: string) {
         setLoading(false);
       }
     },
-    [recepcao, estado, validarRecepcao, registarAuditoria]
+    [recepcao, recarregarAuditoria]
   );
+
+  // Criar entrada ArtSoft — POST /rest/v1/artsoft/entrada
+  const criarEntradaArtsoft = useCallback(async () => {
+    if (!recepcao) {
+      setError('Nenhuma receção ativa para criar entrada ArtSoft');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await api.criarEntradaArtsoft(recepcao.id, {
+        numero_guia: recepcao.numero_guia,
+        numero_encomenda_artsoft: recepcao.numero_encomenda_artsoft,
+        fornecedor_nome: recepcao.fornecedor_nome,
+      });
+      setIntegracao(resp.integracao as ArtsoftIntegration);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar entrada ArtSoft');
+    } finally {
+      setLoading(false);
+    }
+  }, [recepcao]);
+
+  // Tentar novamente entrada ArtSoft — POST /rest/v1/artsoft/entrada/:id/retry
+  const retryEntradaArtsoft = useCallback(async () => {
+    if (!integracao) {
+      setError('Nenhuma integração ArtSoft para repetir');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await api.retryEntradaArtsoft(integracao.id);
+      setIntegracao(resp.integracao as ArtsoftIntegration);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao repetir entrada ArtSoft');
+    } finally {
+      setLoading(false);
+    }
+  }, [integracao]);
 
   return {
     // Estado
@@ -315,6 +336,7 @@ export function useRecepcao(recepcao_id?: string) {
     lotes,
     integracao,
     auditoria,
+    validacao,
     loading,
     error,
 
@@ -326,5 +348,7 @@ export function useRecepcao(recepcao_id?: string) {
     registarLotes,
     validarRecepcao,
     finalizarRecepcao,
+    criarEntradaArtsoft,
+    retryEntradaArtsoft,
   };
 }

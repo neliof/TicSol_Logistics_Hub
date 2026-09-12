@@ -76,6 +76,15 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
 
   const selectedOrder = orders.find(o => o.id === selectedOrderId) || orders[0];
 
+  // Cria/liga a receção persistida no backend sempre que a guia selecionada
+  // muda — sem isto, todas as ações do hook (documento/divergência/lote/
+  // validação/finalização) ficam sem efeito por não haver recepcao.id ativo.
+  React.useEffect(() => {
+    if (selectedOrder && recepcaoHook.recepcao?.numero_guia !== selectedOrder.numero_guia) {
+      recepcaoHook.criarRecepcao(selectedOrder, 'Operador');
+    }
+  }, [selectedOrder?.numero_guia]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // React to barcode scanner input if active
   React.useEffect(() => {
     if (scannedCode && selectedOrder) {
@@ -121,7 +130,13 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
     onUpdateOrders(updatedOrders);
   };
 
-  const handleCompleteReceiving = () => {
+  const handleCompleteReceiving = async () => {
+    const sucesso = await recepcaoHook.finalizarRecepcao('Operador');
+    if (!sucesso) {
+      showNotification(recepcaoHook.error || 'Não foi possível finalizar a receção');
+      return;
+    }
+
     const updatedOrders = orders.map(ord => {
       if (ord.id !== selectedOrderId) return ord;
       return {
@@ -131,7 +146,7 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
       };
     });
     onUpdateOrders(updatedOrders);
-    showNotification(`Receção da Guia ${selectedOrder.numero_guia} concluída com sucesso! RPC fn_registar_rececao_linha executado.`);
+    showNotification(`Receção da Guia ${selectedOrder.numero_guia} concluída e persistida com sucesso.`);
   };
 
   const handleSync = async () => {
@@ -380,12 +395,8 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
               {/* RececaoArtsoftIntegration — Criar entrada ERP */}
               <RececaoArtsoftIntegration
                 integracao={recepcaoHook.integracao}
-                onCriarEntrada={async () => {
-                  // TODO: Integrar com backend
-                }}
-                onTentarNovamente={async () => {
-                  // TODO: Retry logic
-                }}
+                onCriarEntrada={recepcaoHook.criarEntradaArtsoft}
+                onTentarNovamente={recepcaoHook.retryEntradaArtsoft}
                 loading={recepcaoHook.loading}
               />
             </div>

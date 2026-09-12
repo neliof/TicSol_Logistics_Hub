@@ -156,13 +156,59 @@ export function setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, 
         return res.status(400).json({ error: 'Invalid recepcao id' });
       }
 
-      // TODO: Implementar lógica de validação
+      const recepcaoResult = await req.dbClient.query(
+        `SELECT id FROM logistics.recepcao WHERE id = $1`,
+        [id]
+      );
+      if (recepcaoResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Receção não encontrada' });
+      }
+
+      const [documentoResult, divergenciasResult, lotesResult, paletesResult] = await Promise.all([
+        req.dbClient.query(`SELECT count(*)::int AS n FROM logistics.recepcao_documento WHERE recepcao_id = $1`, [id]),
+        req.dbClient.query(
+          `SELECT count(*)::int AS n FROM logistics.recepcao_divergencia WHERE recepcao_id = $1 AND impacto_entrada_artsoft = 'REVISAR'`,
+          [id]
+        ),
+        req.dbClient.query(`SELECT count(*)::int AS n FROM logistics.recepcao_lote WHERE recepcao_id = $1`, [id]),
+        req.dbClient.query(
+          `SELECT count(*)::int AS total, count(*) FILTER (WHERE localizacao_confirmada IS NOT NULL)::int AS com_localizacao
+           FROM logistics.recepcao_palete WHERE recepcao_id = $1`,
+          [id]
+        ),
+      ]);
+
+      const documentoRegistado = documentoResult.rows[0].n > 0;
+      const divergenciasNaoResolvidas = divergenciasResult.rows[0].n;
+      const lotesRegistados = lotesResult.rows[0].n > 0;
+      const paletesTotal = paletesResult.rows[0].total;
+      const paletesComLocalizacao = paletesResult.rows[0].com_localizacao;
+      const localizacoesDefinidas = paletesTotal === 0 || paletesComLocalizacao === paletesTotal;
+
+      const erros = [];
+      if (!documentoRegistado) erros.push('Documento do fornecedor não registado');
+      if (paletesTotal > 0 && !localizacoesDefinidas) {
+        erros.push(`${paletesTotal - paletesComLocalizacao} palete(s) sem localização definida`);
+      }
+
+      const alertas = [];
+      if (divergenciasNaoResolvidas > 0) {
+        alertas.push(`${divergenciasNaoResolvidas} divergência(s) aguardam resolução`);
+      }
+      if (!lotesRegistados) {
+        alertas.push('Nenhum lote registado para esta receção');
+      }
+
       const validacao = {
-        documento_registado: false,
-        linhas_conferidas: false,
-        divergencias_nao_resolvidas: 0,
-        valido: false,
-        erros: ['Validação não implementada ainda']
+        documento_registado: documentoRegistado,
+        linhas_conferidas: true,
+        divergencias_nao_resolvidas: divergenciasNaoResolvidas,
+        lotes_obrigatorios_registados: lotesRegistados,
+        localizacoes_definidas: localizacoesDefinidas,
+        paletes_criadas: paletesTotal,
+        alertas,
+        erros,
+        valido: erros.length === 0,
       };
 
       res.json({ success: true, validacao });
@@ -209,7 +255,24 @@ export function setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, 
         return res.status(400).json({ error: 'Invalid recepcao id' });
       }
 
-      // TODO: Validar receção antes de finalizar
+      const documentoResult = await req.dbClient.query(
+        `SELECT count(*)::int AS n FROM logistics.recepcao_documento WHERE recepcao_id = $1`,
+        [id]
+      );
+      if (documentoResult.rows[0].n === 0) {
+        return res.status(409).json({ error: 'Não é possível finalizar: documento do fornecedor não registado' });
+      }
+
+      const paletesResult = await req.dbClient.query(
+        `SELECT count(*)::int AS total, count(*) FILTER (WHERE localizacao_confirmada IS NOT NULL)::int AS com_localizacao
+         FROM logistics.recepcao_palete WHERE recepcao_id = $1`,
+        [id]
+      );
+      const { total, com_localizacao } = paletesResult.rows[0];
+      if (total > 0 && com_localizacao < total) {
+        return res.status(409).json({ error: `Não é possível finalizar: ${total - com_localizacao} palete(s) sem localização definida` });
+      }
+
       const result = await req.dbClient.query(
         `UPDATE logistics.recepcao
          SET estado = 'CONCLUIDA', data_conclusao = NOW(), atualizado_em = NOW()
@@ -401,13 +464,24 @@ export function setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, 
   // 15. GET /rest/v1/localizacao/sugerida — Localização sugerida
   app.get('/rest/v1/localizacao/sugerida', verifyJWT, setEmpresaContext, async (req, res) => {
     try {
-      // TODO: Implementar algoritmo de sugestão de localização baseado em regras
-      const sugestoes = [
-        { zona: 'A', tipo: 'RACK', corredor: 1, prateleira: 1, posicao: 1 },
-        { zona: 'A', tipo: 'RACK', corredor: 1, prateleira: 2, posicao: 1 },
-      ];
+      const tipo = req.query.tipo || 'picking';
+      const limite = Math.min(parseInt(req.query.limit, 10) || 5, 50);
 
-      res.json({ success: true, sugestoes });
+      const result = await req.dbClient.query(
+        `SELECT l.id, l.codigo, l.tipo, l.capacidade_paletes
+         FROM logistics.localizacao l
+         WHERE l.ativa = true
+           AND l.tipo = $1
+           AND l.codigo NOT IN (
+             SELECT localizacao_confirmada FROM logistics.recepcao_palete
+             WHERE localizacao_confirmada IS NOT NULL
+           )
+         ORDER BY l.codigo
+         LIMIT $2`,
+        [tipo, limite]
+      );
+
+      res.json({ success: true, sugestoes: result.rows });
     } catch (err) {
       console.error('GET /rest/v1/localizacao/sugerida error:', err.message);
       res.status(400).json({ error: err.message });
@@ -419,15 +493,23 @@ export function setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, 
   // 16. GET /rest/v1/localizacao/disponivel — Localizações disponíveis
   app.get('/rest/v1/localizacao/disponivel', verifyJWT, setEmpresaContext, async (req, res) => {
     try {
-      // TODO: Query localizações que não têm palete associada
-      const disponveis = [
-        'A-RACK-1-1-1',
-        'A-RACK-1-1-2',
-        'A-RACK-1-2-1',
-        'B-PISO-1-1-1',
-      ];
+      const limite = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+      const offset = parseInt(req.query.offset, 10) || 0;
 
-      res.json({ success: true, disponveis });
+      const result = await req.dbClient.query(
+        `SELECT l.codigo
+         FROM logistics.localizacao l
+         WHERE l.ativa = true
+           AND l.codigo NOT IN (
+             SELECT localizacao_confirmada FROM logistics.recepcao_palete
+             WHERE localizacao_confirmada IS NOT NULL
+           )
+         ORDER BY l.codigo
+         LIMIT $1 OFFSET $2`,
+        [limite, offset]
+      );
+
+      res.json({ success: true, disponveis: result.rows.map((r) => r.codigo) });
     } catch (err) {
       console.error('GET /rest/v1/localizacao/disponivel error:', err.message);
       res.status(400).json({ error: err.message });

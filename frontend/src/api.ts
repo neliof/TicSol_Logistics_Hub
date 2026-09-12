@@ -286,4 +286,95 @@ export const api = {
       body: JSON.stringify(config),
     });
   },
+
+  // --- Receção (P1) ---
+
+  criarRecepcao(payload: {
+    numero_guia: string;
+    numero_encomenda_artsoft?: string;
+    fornecedor_id?: string;
+    fornecedor_nome: string;
+    operador_inicio: string;
+  }) {
+    return pedir<{ success: boolean; recepcao: any }>('/rest/v1/recepcao', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  atualizarEstadoRecepcao(id: string, estado: string, operador: string) {
+    return pedir<{ success: boolean; recepcao: any }>(`/rest/v1/recepcao/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado, operador }),
+    });
+  },
+
+  registarDocumentoRecepcao(
+    id: string,
+    payload: { tipo: string; numero: string; data: string; operador: string; url_anexo?: string; observacoes?: string }
+  ) {
+    return pedir<{ success: boolean; documento: any }>(`/rest/v1/recepcao/${id}/documento`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  registarDivergenciaRecepcao(
+    id: string,
+    payload: {
+      linha_id: string;
+      tipo: 'FALTA' | 'EXCESSO' | 'DANIFICADO' | 'NAO_ENCOMENDADO' | 'QUALIDADE';
+      quantidade: number;
+      motivo: string;
+      operador: string;
+      impacto_entrada_artsoft?: 'ACEITAR' | 'REJEITAR' | 'REVISAR';
+    }
+  ) {
+    return pedir<{ success: boolean; divergencia: any }>(`/rest/v1/recepcao/${id}/divergencia`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  registarLoteRecepcao(
+    id: string,
+    payload: { linha_id: string; lote: string; quantidade: number; data_validade: string; vida_util_dias?: number }
+  ) {
+    return pedir<{ success: boolean; lote: any }>(`/rest/v1/recepcao/${id}/lote`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  validarRecepcao(id: string) {
+    return pedir<{ success: boolean; validacao: any }>(`/rest/v1/recepcao/${id}/validacao`);
+  },
+
+  auditoriaRecepcao(id: string) {
+    return pedir<{ success: boolean; auditoria: any[] }>(`/rest/v1/recepcao/${id}/auditoria`);
+  },
+
+  finalizarRecepcao(id: string, operador: string) {
+    return pedir<{ success: boolean; recepcao: any }>(`/rest/v1/recepcao/${id}/finalizar`, {
+      method: 'POST',
+      body: JSON.stringify({ operador }),
+    });
+  },
+
+  criarEntradaArtsoft(recepcao_id: string, payload: Record<string, unknown>) {
+    return pedir<{ success: boolean; integracao: any }>('/rest/v1/artsoft/entrada', {
+      method: 'POST',
+      body: JSON.stringify({ recepcao_id, payload }),
+    });
+  },
+
+  statusEntradaArtsoft(id: string) {
+    return pedir<{ success: boolean; integracao: any }>(`/rest/v1/artsoft/entrada/${id}/status`);
+  },
+
+  retryEntradaArtsoft(id: string) {
+    return pedir<{ success: boolean; integracao: any }>(`/rest/v1/artsoft/entrada/${id}/retry`, {
+      method: 'POST',
+    });
+  },
 };

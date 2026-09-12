@@ -45,7 +45,8 @@ const DEFAULT_RULES: RuleConfig[] = [
 ];
 
 export function useRegras() {
-  const [rules, setRules] = useState<RuleConfig[]>(DEFAULT_RULES);
+  const [rules, setRules] = useState<RuleConfig[]>([]);
+  const [usandoDefaults, setUsandoDefaults] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,11 +55,15 @@ export function useRegras() {
       try {
         const rows = await api.regras(100);
         const mapped = rows.map(regraParaRuleConfig);
+        // Sem regras configuradas no ERP é um estado legítimo (cliente novo):
+        // usar a regra padrão como fallback funcional é aceitável aqui.
         setRules(mapped.length > 0 ? mapped : DEFAULT_RULES);
+        setUsandoDefaults(mapped.length === 0);
         setError(null);
       } catch (err) {
-        // Fallback to defaults on error
-        setRules(DEFAULT_RULES);
+        // Falha real de rede/API: não substituir regras já carregadas por
+        // defaults silenciosamente. Mantém o que já existia (vazio no
+        // primeiro load) e expõe o erro para a UI avisar o operador.
         setError(err instanceof Error ? err.message : 'Falha ao carregar regras.');
       } finally {
         setLoading(false);
@@ -67,5 +72,5 @@ export function useRegras() {
     carregar();
   }, []);
 
-  return { rules, setRules, loading, error };
+  return { rules, setRules, loading, error, usandoDefaults };
 }
