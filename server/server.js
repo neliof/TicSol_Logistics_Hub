@@ -11,7 +11,15 @@ import { loginLimiter, syncLimiter, apiLimiter } from './middleware/rateLimiter.
 
 dotenv.config()
 
-const { Pool } = pkg
+const { Pool, types } = pkg
+
+// Colunas DATE (OID 1082) vêm por default como objeto Date do node-postgres,
+// construído a partir de "YYYY-MM-DD" com componentes *locais*
+// (new Date(ano, mes, dia)); ao serializar em JSON, Date.toJSON() usa
+// sempre UTC, o que desvia o dia mostrado ao cliente sempre que o processo
+// não corre em UTC (ex.: "2026-09-12" virava "2026-09-11T23:00:00.000Z" em
+// UTC+1). Devolver a string tal como o Postgres a envia evita a conversão.
+types.setTypeParser(1082, (val) => val)
 const app = express()
 const port = process.env.PORT || 3000
 const jwtSecret = process.env.JWT_SECRET
@@ -301,6 +309,33 @@ app.get(
     }
   }
 )
+
+// Os 4 módulos P1-P4 têm de registar-se ANTES das rotas genéricas
+// /rest/v1/:table abaixo — Express resolve pela primeira rota registada que
+// faça match, não pela mais específica. Como bug real encontrado ao testar
+// (POST /rest/v1/recepcao devolvia "Access denied to table: recepcao"), a
+// rota genérica capturava sempre pedidos de 1 segmento (/rest/v1/recepcao,
+// /rest/v1/palete, /rest/v1/expedicao) antes de chegarem ao módulo certo.
+
+// Setup P1 Receção endpoints
+const { setupRecepcaoEndpoints } = await import('./recepcao-endpoints.js')
+setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[RECEPCAO] 17 endpoints registados com sucesso')
+
+// Setup P2 Paletização endpoints
+const { setupPaletizacaoEndpoints } = await import('./paletizacao-endpoints.js')
+setupPaletizacaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[PALETIZACAO] 8 endpoints registados com sucesso')
+
+// Setup P3 Stock endpoints
+const { setupStockEndpoints } = await import('./stock-endpoints.js')
+setupStockEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[STOCK] 6 endpoints registados com sucesso')
+
+// Setup P4 Expedição endpoints
+const { setupExpedicaoEndpoints } = await import('./expedicao-endpoints.js')
+setupExpedicaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[EXPEDICAO] 6 endpoints registados com sucesso')
 
 app.get('/rest/v1/:table', verifyJWT, setEmpresaContext, async (req, res) => {
   console.log(`[GET /rest/v1/:table] table=${req.params.table}, user=${req.user ? 'yes' : 'no'}`)
@@ -1248,26 +1283,6 @@ app.post('/api/artsoft/series/save', verifyJWT, async (req, res) => {
     })
   }
 })
-
-// Setup P1 Receção endpoints
-const { setupRecepcaoEndpoints } = await import('./recepcao-endpoints.js')
-setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
-console.log('[RECEPCAO] 17 endpoints registados com sucesso')
-
-// Setup P2 Paletização endpoints
-const { setupPaletizacaoEndpoints } = await import('./paletizacao-endpoints.js')
-setupPaletizacaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
-console.log('[PALETIZACAO] 8 endpoints registados com sucesso')
-
-// Setup P3 Stock endpoints
-const { setupStockEndpoints } = await import('./stock-endpoints.js')
-setupStockEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
-console.log('[STOCK] 6 endpoints registados com sucesso')
-
-// Setup P4 Expedição endpoints
-const { setupExpedicaoEndpoints } = await import('./expedicao-endpoints.js')
-setupExpedicaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
-console.log('[EXPEDICAO] 6 endpoints registados com sucesso')
 
 const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
