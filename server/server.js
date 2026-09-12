@@ -1172,6 +1172,11 @@ app.post('/api/artsoft/series/save', verifyJWT, async (req, res) => {
   }
 })
 
+// Setup P1 Receção endpoints
+const { setupRecepcaoEndpoints } = await import('./recepcao-endpoints.js')
+setupRecepcaoEndpoints(app, pool, verifyJWT, setEmpresaContext, UUID_RE)
+console.log('[RECEPCAO] 17 endpoints registados com sucesso')
+
 const server = app.listen(port, async () => {
   console.log(`TicSol API Server running on http://localhost:${port}`)
 
