@@ -98,6 +98,25 @@ const verifyJWT = (req, res, next) => {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+/**
+ * Parseia uma data "YYYY-MM-DD" (formato de <input type="date">) sem
+ * envolver conversão de fuso horário. `new Date("YYYY-MM-DD")` é sempre
+ * interpretado como UTC midnight pelo motor JS, mas os pontos que depois
+ * extraem ano/mês/dia (ex.: formatarDataArtsoft) usam getFullYear/getMonth/
+ * getDate, que são locais — a combinação das duas coisas pode desviar o dia
+ * em ±1 consoante o fuso horário do processo Node. Construir a Date já com
+ * componentes locais elimina essa ambiguidade.
+ * @param {string} valor
+ * @returns {Date|null}
+ */
+function parseDataLocalSemFuso(valor) {
+  if (!valor) return null
+  const m = String(valor).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return new Date(valor) // formato inesperado: fallback ao parser nativo
+  const [, ano, mes, dia] = m
+  return new Date(Number(ano), Number(mes) - 1, Number(dia))
+}
+
 const setEmpresaContext = async (req, res, next) => {
   try {
     // Se sem autenticação, permite acesso com contexto vazio (RLS usa NULL)
@@ -495,8 +514,8 @@ app.post('/api/artsoft/guias/sync', verifyJWT, syncLimiter, async (req, res) => 
       ])
 
       const logger = (msg) => console.log(`[SYNC:${empresaId}] ${msg}`)
-      const dataInicio = req.body?.data_inicio ? new Date(req.body.data_inicio) : null
-      const dataFim = req.body?.data_fim ? new Date(req.body.data_fim) : null
+      const dataInicio = parseDataLocalSemFuso(req.body?.data_inicio)
+      const dataFim = parseDataLocalSemFuso(req.body?.data_fim)
       const series = req.body?.series || null
 
       logger('Iniciado…')
