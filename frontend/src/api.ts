@@ -377,4 +377,53 @@ export const api = {
       method: 'POST',
     });
   },
+
+  // --- Expedição (P4) ---
+
+  listarExpedicoes(estado?: string, limite = 50, offset = 0) {
+    const params = new URLSearchParams({ limit: String(limite), offset: String(offset) });
+    if (estado) params.set('estado', estado);
+    return pedir<{ success: boolean; expedicoes: any[]; limit: number; offset: number }>(`/rest/v1/expedicao?${params}`);
+  },
+
+  detalheExpedicao(id: string) {
+    return pedir<{ success: boolean; expedicao: any }>(`/rest/v1/expedicao/${id}`);
+  },
+
+  registarConferenciaExpedicao(
+    id: string,
+    payload: { palete_sscc: string; quantidade_conferida: number; observacoes?: string; operador: string }
+  ) {
+    return pedir<{ success: boolean; conferencia: any }>(`/rest/v1/expedicao/${id}/conferencia`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  registarRastreamentoExpedicao(
+    id: string,
+    payload: { evento: string; localizacao?: string; descricao: string; operador: string }
+  ) {
+    return pedir<{ success: boolean; rastreamento: any }>(`/rest/v1/expedicao/${id}/rastreamento`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  emitirDocumentoExpedicao(id: string, payload: { tipo: string; serie: string }) {
+    return pedir<{ success: boolean; documento: any }>(`/rest/v1/expedicao/${id}/documento`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  atualizarStatusExpedicao(
+    id: string,
+    payload: { novo_status: string; motivo?: string; operador?: string; localizacao?: string }
+  ) {
+    return pedir<{ success: boolean; expedicao: any }>(`/rest/v1/expedicao/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
 };
