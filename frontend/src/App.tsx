@@ -103,6 +103,15 @@ function AppAutenticada({
   // Expedição State — Imefar distribui para clientes via Guias de Transporte (ARTSOFT)
   const { pedidos: guiasEntrada, paletas: paletasExpedicao, guias: comprovantesEmbarque, loading: expedicaoLoading, error: expedicaoError, setPedidos: setGuiasEntrada, setPaletas: setPaletasExpedicao, setGuias: setComprovantesEmbarque, carregarLinhas } = useExpedicaoData();
 
+  // Armazém por defeito para criar cargas/embarques (sem UI de seleção
+  // de armazém ainda — assume-se o primeiro devolvido pela API).
+  const [armazemIdDefeito, setArmazemIdDefeito] = useState<string | null>(null);
+  useEffect(() => {
+    api.listarArmazens(1)
+      .then((armazens) => setArmazemIdDefeito(armazens[0]?.id ?? null))
+      .catch(() => setArmazemIdDefeito(null));
+  }, []);
+
   // Scanner & Navigation Helpers
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
@@ -215,33 +224,75 @@ function AppAutenticada({
     );
   };
 
-  // Handler: Create Palete Expedição (from PaletizacaoModule)
-  const handleCreatePaletaExpedicao = (palete: PaletaExpedicao) => {
-    setPaletasExpedicao(prev => [palete, ...prev]);
-    setGuiasEntrada(prev =>
-      prev.map(g => (g.id === palete.guia_id ? { ...g, status: 'PALETIZADA' } : g))
-    );
-    registarAuditoria(
-      'CRIAR_PALETE_EXPEDICAO_AUTO',
-      'logistics.palete_expedicao',
-      { sscc: palete.sscc, guia_id: palete.guia_id, temperatura: palete.temperatura_zona },
-      'Operador'
-    );
-    showSuccess(`Palete ${palete.sscc} (Expedição) criada com sucesso`);
+  // Handler: Create Palete Expedição (from PaletizacaoModule) — persiste em
+  // logistics.palete + logistics.caixa via POST /rest/v1/palete-expedicao;
+  // o SSCC oficial vem da resposta do backend (logistics.gerar_sscc), não
+  // do valor calculado localmente pela UI.
+  const handleCreatePaletaExpedicao = async (palete: PaletaExpedicao) => {
+    try {
+      const resp = await api.criarPaleteExpedicao({
+        fluxo: 'pbl',
+        temperatura_zona: palete.temperatura_zona,
+        peso_kg: palete.peso_total_kg,
+        altura_mm: Math.round(palete.altura_palete_cm * 10),
+        produtos: palete.produtos.map((p) => ({
+          artigo_codigo: p.artigo_codigo,
+          lote: p.lote,
+          quantidade: p.quantidade,
+        })),
+      });
+
+      const paleteReal: PaletaExpedicao = { ...palete, id: resp.palete.id, sscc: resp.palete.sscc };
+      setPaletasExpedicao(prev => [paleteReal, ...prev]);
+      setGuiasEntrada(prev =>
+        prev.map(g => (g.id === palete.guia_id ? { ...g, status: 'PALETIZADA' } : g))
+      );
+      registarAuditoria(
+        'CRIAR_PALETE_EXPEDICAO',
+        'logistics.palete',
+        { sscc: paleteReal.sscc, guia_id: palete.guia_id, temperatura: palete.temperatura_zona },
+        'Operador'
+      );
+      showSuccess(`Palete ${paleteReal.sscc} (Expedição) criada e persistida com sucesso`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao criar palete de expedição');
+    }
   };
 
-  // Handler: Create Embarque Comprovante
-  const handleCreateEmbarque = (comprovante: ComprovanteEmbarque) => {
-    setComprovantesEmbarque(prev => [comprovante, ...prev]);
-    setGuiasEntrada(prev =>
-      prev.map(g => (g.id === comprovante.guia_id ? { ...g, status: 'EXPEDIDA' } : g))
-    );
-    registarAuditoria(
-      'REGISTAR_EMBARQUE_SAIDA',
-      'logistics.comprovante_embarque',
-      { numero_guia: comprovante.guia_id, transportador: comprovante.transportador_nome },
-      'Operador'
-    );
+  // Handler: Create Embarque Comprovante — persiste em logistics.carga via
+  // POST /rest/v1/carga; a carga fica associada às paletes por SSCC.
+  const handleCreateEmbarque = async (comprovante: ComprovanteEmbarque) => {
+    if (!armazemIdDefeito) {
+      showError('Nenhum armazém configurado — não é possível registar o embarque');
+      return;
+    }
+
+    try {
+      const resp = await api.criarCarga({
+        armazem_id: armazemIdDefeito,
+        paletes_sscc: comprovante.paletes_sscc,
+        transportadora_nome: comprovante.transportador_nome,
+        matricula_veiculo: comprovante.matricula_veiculo,
+        motorista_nome: comprovante.motorista_nome,
+        motorista_contacto: comprovante.contacto_motorista,
+        operador_embarque: comprovante.operador_embarque,
+      });
+
+      const comprovanteReal: ComprovanteEmbarque = { ...comprovante, id: resp.carga.id };
+      setComprovantesEmbarque(prev => [comprovanteReal, ...prev]);
+      setGuiasEntrada(prev =>
+        prev.map(g => (g.id === comprovante.guia_id ? { ...g, status: 'EXPEDIDA' } : g))
+      );
+      registarAuditoria(
+        'REGISTAR_EMBARQUE_SAIDA',
+        'logistics.carga',
+        { numero_guia: comprovante.guia_id, transportador: comprovante.transportador_nome },
+        'Operador'
+      );
+      showSuccess(`Embarque registado e persistido com sucesso`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Erro ao registar embarque');
+    }
   };
 
   // Handler: Sync documents (Receção/Paletização/Expedição)

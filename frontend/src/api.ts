@@ -515,4 +515,73 @@ export const api = {
       `/rest/v1/auditoria?limit=${limite}&offset=${offset}`
     );
   },
+
+  // --- Palete de Expedição / Carga (embarque) ---
+
+  criarPaleteExpedicao(payload: {
+    fluxo: 'pbs' | 'pbl' | 'cross_dock' | 'abastecimento_direto';
+    temperatura_zona?: 'AMBIENTE' | 'FRESCO' | 'CONGELADO';
+    peso_kg?: number;
+    altura_mm?: number;
+    cliente_id?: string;
+    produtos: Array<{
+      produto_id?: string;
+      artigo_codigo?: string;
+      lote?: string;
+      data_validade?: string;
+      quantidade: number;
+      peso_real_kg?: number;
+    }>;
+  }) {
+    return pedir<{ success: boolean; palete: any }>('/rest/v1/palete-expedicao', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  atualizarEstadoPaleteExpedicao(id: string, novo_estado: string) {
+    return pedir<{ success: boolean; palete: any }>(`/rest/v1/palete-expedicao/${id}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ novo_estado }),
+    });
+  },
+
+  criarCarga(payload: {
+    armazem_id: string;
+    paletes_sscc: string[];
+    transportadora_nome?: string;
+    matricula_veiculo?: string;
+    motorista_nome?: string;
+    motorista_contacto?: string;
+    operador_embarque?: string;
+  }) {
+    return pedir<{ success: boolean; carga: any }>('/rest/v1/carga', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  atualizarStatusCarga(
+    id: string,
+    payload: { novo_estado: string; peso_real_kg?: number; volume_real_m3?: number; observacoes?: string }
+  ) {
+    return pedir<{ success: boolean; carga: any }>(`/rest/v1/carga/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  detalheCarga(id: string) {
+    return pedir<{ success: boolean; carga: any }>(`/rest/v1/carga/${id}`);
+  },
+
+  listarCargas(estado?: string, limite = 50, offset = 0) {
+    const params = new URLSearchParams({ limit: String(limite), offset: String(offset) });
+    if (estado) params.set('estado', estado);
+    return pedir<{ success: boolean; cargas: any[]; limit: number; offset: number }>(`/rest/v1/carga?${params}`);
+  },
+
+  listarArmazens(limite = 20) {
+    return pedir<any[]>(`/rest/v1/armazem?limit=${limite}`);
+  },
 };

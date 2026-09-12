@@ -258,6 +258,7 @@ const ALLOWED_TABLES = new Set([
   'cliente',
   'fornecedor',
   'palete',
+  'armazem',
   'regra_logistica',
   'artsoft_stock_snapshot',
   'vw_reconciliacao_stock',
