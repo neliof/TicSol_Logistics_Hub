@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_documento_estado ON logistics.documento(estado);
 CREATE TABLE IF NOT EXISTS logistics.documento_numeracao (
   empresa_id      uuid NOT NULL REFERENCES logistics.empresa(id),
   serie           varchar(20) NOT NULL,
-  tipo            tipo_documento NOT NULL,
+  tipo            logistics.tipo_documento NOT NULL,
   ultimo_numero   bigint NOT NULL DEFAULT 0,
   atualizado_em   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (empresa_id, serie, tipo)
@@ -44,7 +44,7 @@ CREATE POLICY rls_documento_numeracao ON logistics.documento_numeracao
 -- Atribui e persiste o próximo número da série de forma atómica
 -- (INSERT ... ON CONFLICT evita race condition entre pedidos concorrentes).
 CREATE OR REPLACE FUNCTION logistics.proximo_numero_documento(
-  p_empresa_id uuid, p_serie varchar, p_tipo tipo_documento
+  p_empresa_id uuid, p_serie varchar, p_tipo logistics.tipo_documento
 ) RETURNS bigint
 LANGUAGE plpgsql
 AS $$

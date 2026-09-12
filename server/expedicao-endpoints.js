@@ -131,7 +131,7 @@ export function setupExpedicaoEndpoints(app, pool, verifyJWT, setEmpresaContext,
       // Numeração sequencial real por empresa+série+tipo — nunca Math.random()
       // para numeração fiscal (022_expedicao_schema.sql)
       const numeroResult = await req.dbClient.query(
-        `SELECT logistics.proximo_numero_documento($1, $2, $3::tipo_documento) AS numero`,
+        `SELECT logistics.proximo_numero_documento($1, $2, $3::logistics.tipo_documento) AS numero`,
         [empresaId, serie, tipo]
       );
       const numeroSequencial = numeroResult.rows[0].numero;
