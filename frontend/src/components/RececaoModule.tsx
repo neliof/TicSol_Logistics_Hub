@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ReceivingOrder, ReceivingLine } from '../types/wms';
 import { useSeriesConfig } from '../hooks/useSeriesConfig';
+import { useRecepcao } from '../hooks/useRecepcao';
 import { SyncDocumentsModal } from './SyncDocumentsModal';
 import { EmptyState } from './EmptyState';
 import {
@@ -22,6 +23,15 @@ import {
   AlertCircle,
   Inbox
 } from 'lucide-react';
+import { RececaoConferencia } from './rececao/RececaoConferencia';
+import { RececaoDivergencias } from './rececao/RececaoDivergencias';
+import { RececaoDocumento } from './rececao/RececaoDocumento';
+import { RececaoLotes } from './rececao/RececaoLotes';
+import { RececaoLocalizacao } from './rececao/RececaoLocalizacao';
+import { RececaoPaletizacao } from './rececao/RececaoPaletizacao';
+import { RececaoValidacao } from './rececao/RececaoValidacao';
+import { RececaoArtsoftIntegration } from './rececao/RececaoArtsoftIntegration';
+import { RececaoPartial } from './rececao/RececaoPartial';
 
 interface RececaoModuleProps {
   orders: ReceivingOrder[];
@@ -45,6 +55,7 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
   isSyncLoading = false
 }) => {
   const { receção: seriesReceção } = useSeriesConfig('receção');
+  const recepcaoHook = useRecepcao();
 
   const [selectedOrderId, setSelectedOrderId] = useState<string>(orders[0]?.id || '');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
@@ -53,6 +64,15 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncDataInicio, setSyncDataInicio] = useState('');
   const [syncDataFim, setSyncDataFim] = useState('');
+
+  // Modais P1
+  const [showDocumentoModal, setShowDocumentoModal] = useState(false);
+  const [showDivergenciasModal, setShowDivergenciasModal] = useState(false);
+  const [selectedLinha, setSelectedLinha] = useState<ReceivingLine | null>(null);
+  const [showLotesModal, setShowLotesModal] = useState(false);
+  const [showLocalizacaoModal, setShowLocalizacaoModal] = useState(false);
+  const [selectedPaletaSSCC, setSelectedPaletaSSCC] = useState<string | null>(null);
+  const [showValidacaoModal, setShowValidacaoModal] = useState(false);
 
   const selectedOrder = orders.find(o => o.id === selectedOrderId) || orders[0];
 
@@ -299,116 +319,75 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
 
         {/* Column 3: Product Lines */}
         {selectedOrder && (
-          <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm overflow-hidden flex flex-col">
-            <h3 className="font-semibold text-sm text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
-              <FileText className="w-4 h-4 text-blue-600" />
-              Linhas ({selectedOrder.linhas.length})
-            </h3>
-
+          <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm overflow-hidden flex flex-col space-y-4">
             <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
-              {selectedOrder.linhas.map((line) => {
-                const remainingToPalletize = line.qtd_recebida_caixas - line.qtd_ja_paletizada_caixas;
+              {/* RececaoPartial — Histórico receções anteriores */}
+              {false && (
+                <RececaoPartial
+                  recepcoes={[]}
+                  onRetomar={() => {}}
+                  onVisualizarDetalhes={() => {}}
+                />
+              )}
 
-                return (
-                  <div
-                    key={line.id}
-                    className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-xs text-blue-600 font-bold shrink-0">{line.artigo_codigo}</span>
-                          <span className="text-xs font-mono text-slate-500 truncate">EAN: {line.ean_barcode}</span>
-                        </div>
-                        <h5 className="font-bold text-xs text-slate-900 line-clamp-2">{line.artigo_descricao}</h5>
-                      </div>
-                      <button
-                        onClick={() => onNavigateToPaletizacao(selectedOrder.id, line.id)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[10px] rounded-md whitespace-nowrap shrink-0"
-                      >
-                        <Boxes className="w-3 h-3" />
-                        Paletizar ({remainingToPalletize})
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div>
-                        <label className="text-slate-500 block mb-0.5">Esperado</label>
-                        <input
-                          type="number"
-                          disabled
-                          value={line.qtd_esperada_caixas}
-                          className="w-full bg-slate-200/60 border border-slate-300 rounded px-2 py-1 font-mono text-slate-600 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-700 font-semibold block mb-0.5">Recebido (Cx)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={line.qtd_recebida_caixas}
-                          onChange={(e) =>
-                            handleUpdateLine(line.id, {
-                              qtd_recebida_caixas: parseInt(e.target.value, 10) || 0
-                            })
-                          }
-                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1 font-mono text-blue-700 font-bold text-xs focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-700 block mb-0.5">Lote</label>
-                        <input
-                          type="text"
-                          value={line.lote || ''}
-                          onChange={(e) =>
-                            handleUpdateLine(line.id, { lote: e.target.value })
-                          }
-                          placeholder="LOTE"
-                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1 font-mono text-slate-800 text-xs focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-700 block mb-0.5">Validade</label>
-                        <input
-                          type="date"
-                          value={line.data_validade || ''}
-                          onChange={(e) =>
-                            handleUpdateLine(line.id, { data_validade: e.target.value })
-                          }
-                          className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded px-2 py-1 font-mono text-slate-800 text-xs focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-rose-600 font-medium block mb-0.5">Danificados</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={line.danificados_caixas}
-                          onChange={(e) =>
-                            handleUpdateLine(line.id, {
-                              danificados_caixas: parseInt(e.target.value, 10) || 0
-                            })
-                          }
-                          className="w-full bg-white border border-slate-300 focus:border-rose-500 rounded px-2 py-1 font-mono text-rose-600 font-bold text-xs focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-emerald-700 font-medium block mb-0.5">Já Paletizado</label>
-                        <div className="w-full bg-emerald-50 border border-emerald-200 rounded px-2 py-1 font-mono text-emerald-700 font-bold text-xs">
-                          {line.qtd_ja_paletizada_caixas}
-                        </div>
-                      </div>
-                    </div>
-
-                    {line.danificados_caixas > 0 && (
-                      <div className="p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-800 flex items-center gap-2">
-                        <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                        <span><strong>Anomalia:</strong> {line.danificados_caixas} cx danificadas</span>
-                      </div>
-                    )}
+              {/* RececaoDocumento — Registar documento fornecedor */}
+              <div className="border-b border-slate-200 pb-4">
+                <button
+                  onClick={() => setShowDocumentoModal(true)}
+                  className="w-full px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  {recepcaoHook.documento ? '✓ Editar Documento' : '+ Registar Documento'}
+                </button>
+                {recepcaoHook.documento && (
+                  <div className="mt-2 text-xs text-slate-600">
+                    {recepcaoHook.documento.tipo} • {recepcaoHook.documento.numero}
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {/* RececaoConferencia — Conferência linha a linha */}
+              <div className="border-b border-slate-200 pb-4">
+                <h3 className="font-semibold text-sm text-slate-900 mb-3">Conferência de Linhas</h3>
+                <RececaoConferencia
+                  linhas={selectedOrder.linhas}
+                  onConferir={(linha_id, qtd_recebida, danificados) => {
+                    handleUpdateLine(linha_id, { qtd_recebida_caixas: qtd_recebida, danificados_caixas: danificados });
+                  }}
+                  onDiverger={(linha_id) => {
+                    const linha = selectedOrder.linhas.find(l => l.id === linha_id);
+                    if (linha) {
+                      setSelectedLinha(linha);
+                      setShowDivergenciasModal(true);
+                    }
+                  }}
+                  operador="Operador"
+                />
+              </div>
+
+              {/* RececaoValidacao — Checklist pré-finalização */}
+              <div className="border-b border-slate-200 pb-4">
+                <RececaoValidacao
+                  validacao={recepcaoHook.validarRecepcao()}
+                  onFinalizar={async () => {
+                    setShowValidacaoModal(false);
+                    handleCompleteReceiving();
+                  }}
+                  loading={recepcaoHook.loading}
+                />
+              </div>
+
+              {/* RececaoArtsoftIntegration — Criar entrada ERP */}
+              <RececaoArtsoftIntegration
+                integracao={recepcaoHook.integracao}
+                onCriarEntrada={async () => {
+                  // TODO: Integrar com backend
+                }}
+                onTentarNovamente={async () => {
+                  // TODO: Retry logic
+                }}
+                loading={recepcaoHook.loading}
+              />
             </div>
           </div>
         )}
@@ -425,6 +404,74 @@ export const RececaoModule: React.FC<RececaoModuleProps> = ({
         onDataFimChange={setSyncDataFim}
         onSync={handleSync}
         onClose={() => setShowSyncModal(false)}
+      />
+
+      {/* P1 Modais */}
+      <RececaoDocumento
+        isOpen={showDocumentoModal}
+        documento={recepcaoHook.documento || null}
+        onSave={(tipo, numero, data, url_anexo, observacoes) => {
+          recepcaoHook.registarDocumento(tipo, numero, data, 'Operador', url_anexo);
+          setShowDocumentoModal(false);
+          showNotification('Documento registado com sucesso');
+        }}
+        onCancel={() => setShowDocumentoModal(false)}
+      />
+
+      <RececaoDivergencias
+        isOpen={showDivergenciasModal}
+        linha={selectedLinha}
+        onSave={(tipo, quantidade, motivo, impacto) => {
+          if (selectedLinha) {
+            recepcaoHook.registarDivergencia(
+              selectedLinha.id,
+              tipo as any,
+              quantidade,
+              motivo,
+              'Operador',
+              impacto as any
+            );
+          }
+          setShowDivergenciasModal(false);
+          setSelectedLinha(null);
+          showNotification('Divergência registada');
+        }}
+        onCancel={() => {
+          setShowDivergenciasModal(false);
+          setSelectedLinha(null);
+        }}
+      />
+
+      <RececaoLotes
+        isOpen={showLotesModal}
+        linha={selectedLinha}
+        lotes={[]}
+        onSave={(novosLotes) => {
+          if (selectedLinha) {
+            recepcaoHook.registarLotes(selectedLinha.id, novosLotes, 'Operador');
+          }
+          setShowLotesModal(false);
+          setSelectedLinha(null);
+          showNotification('Lotes registados');
+        }}
+        onCancel={() => {
+          setShowLotesModal(false);
+          setSelectedLinha(null);
+        }}
+      />
+
+      <RececaoLocalizacao
+        isOpen={showLocalizacaoModal}
+        paletaSSCC={selectedPaletaSSCC}
+        onSave={(localizacao, observacoes) => {
+          setShowLocalizacaoModal(false);
+          setSelectedPaletaSSCC(null);
+          showNotification(`Localização ${localizacao} registada`);
+        }}
+        onCancel={() => {
+          setShowLocalizacaoModal(false);
+          setSelectedPaletaSSCC(null);
+        }}
       />
     </div>
   );
