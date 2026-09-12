@@ -1,0 +1,29 @@
+# Backend Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json ./
+COPY server/package.json server/package.json
+
+# Install dependencies
+RUN npm install
+RUN cd server && npm install
+
+# Copy application files
+COPY server ./server
+COPY artsoft-sync ./artsoft-sync
+
+# Expose port
+EXPOSE 3000
+
+# Set environment
+ENV NODE_ENV=development
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Start server
+CMD ["node", "server/server.js"]

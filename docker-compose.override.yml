@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: ticsol-db
+    environment:
+      POSTGRES_DB: ticsol_logistics_hub
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-app_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: ticsol-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: app_user
+      DB_PASSWORD: ${DB_PASSWORD:-app_password}
+      DB_NAME: ticsol_logistics_hub
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_key_change_in_prod}
+      ARTSOFT_HOST: ${ARTSOFT_HOST:-192.168.1.100}
+      ARTSOFT_PORT: ${ARTSOFT_PORT:-8080}
+      ARTSOFT_USER: ${ARTSOFT_USER:-admin}
+      ARTSOFT_PASSWORD: ${ARTSOFT_PASSWORD:-password}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./server:/app/server
+      - ./artsoft-sync:/app/artsoft-sync
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend Server
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: ticsol-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:3000
+      REACT_APP_ENV: development
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - /app/node_modules
+    command: npm run dev
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: ticsol-network
