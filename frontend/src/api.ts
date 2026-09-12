@@ -494,4 +494,25 @@ export const api = {
       `/rest/v1/localizacao/disponivel?limit=${limite}&offset=${offset}`
     );
   },
+
+  // --- Auditoria genérica de aplicação ---
+
+  registarAuditoria(payload: {
+    operador: string;
+    acao: string;
+    tabela_afetada?: string;
+    detalhes?: Record<string, unknown>;
+    ip_terminal?: string;
+  }) {
+    return pedir<{ success: boolean; evento: any }>('/rest/v1/auditoria', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  listarAuditoria(limite = 50, offset = 0) {
+    return pedir<{ success: boolean; eventos: any[]; limit: number; offset: number }>(
+      `/rest/v1/auditoria?limit=${limite}&offset=${offset}`
+    );
+  },
 };

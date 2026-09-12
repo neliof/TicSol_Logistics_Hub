@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { AppTab, ReceivingOrder, PalletSSCC, StockPosition, RuleConfig, AuditLog } from './types/wms';
 import {
-  INITIAL_AUDIT_LOGS,
   INITIAL_LOCATIONS
 } from './data/mockData';
 import { lerSessao, terminarSessao, Utilizador, api } from './api';
 import { useRegras } from './hooks/useRegras';
+import { useAuditoria } from './hooks/useAuditoria';
 import { useSeriesConfig } from './hooks/useSeriesConfig';
 import { Navbar } from './components/Navbar';
 import { RececaoModule } from './components/RececaoModule';
@@ -75,8 +75,30 @@ function AppAutenticada({
   // WMS Main State Collections — Real data from API + fallback to mock
   const { orders, pallets, stock: stockList, loading: wmsLoading, error: wmsError, setOrders, setPallets, setStock: setStockList } = useWMSData();
   const { rules, setRules } = useRegras();
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
+  const { logs: auditLogs, registar: registarAuditoria } = useAuditoria();
   const [locations] = useState(INITIAL_LOCATIONS);
+
+  // Latência real do backend (medida via /health), não um valor fixo de UI.
+  // null enquanto a primeira medição não chega.
+  const [syncLatencyMs, setSyncLatencyMs] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelado = false;
+    const medir = async () => {
+      const inicio = performance.now();
+      try {
+        await fetch('/health');
+        if (!cancelado) setSyncLatencyMs(Math.round(performance.now() - inicio));
+      } catch {
+        if (!cancelado) setSyncLatencyMs(null);
+      }
+    };
+    medir();
+    const interval = setInterval(medir, 30000);
+    return () => {
+      cancelado = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Expedição State — Imefar distribui para clientes via Guias de Transporte (ARTSOFT)
   const { pedidos: guiasEntrada, paletas: paletasExpedicao, guias: comprovantesEmbarque, loading: expedicaoLoading, error: expedicaoError, setPedidos: setGuiasEntrada, setPaletas: setPaletasExpedicao, setGuias: setComprovantesEmbarque, carregarLinhas } = useExpedicaoData();
@@ -148,25 +170,19 @@ function AppAutenticada({
     };
     setStockList(prev => [newStockPos, ...prev]);
 
-    // 4. Record Audit Log for PostgREST RPC
-    const newLog: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      operador: 'Op. Terminal WMS (ID: 104)',
-      empresa_tenant: selectedTenant,
-      acao: 'MATERIALIZAR_PALETE_SSCC',
-      tabela_afetada: 'logistics.palete_sscc',
-      postgrest_rpc: 'fn_criar_palete_sscc(guia_id, artigo, lote, sscc)',
-      detalhes_json: JSON.stringify({
+    // 4. Record Audit Log (persistido em logistics.auditoria_evento)
+    registarAuditoria(
+      'MATERIALIZAR_PALETE_SSCC',
+      'logistics.palete_sscc',
+      {
         sscc: newPallet.sscc,
         caixas: newPallet.caixas_na_palete,
         lote: newPallet.lote,
         validade: newPallet.data_validade,
         altura_cm: newPallet.altura_total_cm
-      }),
-      ip_terminal: '192.168.1.105 (Terminal Cais)'
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
+      },
+      'Operador'
+    );
 
     // 5. Show success notification
     showSuccess(`Palete ${newPallet.sscc} criada com sucesso`);
@@ -178,18 +194,12 @@ function AppAutenticada({
       prev.map(stk => (stk.id === stockId ? { ...stk, localizacao_codigo: newLocationCode } : stk))
     );
 
-    const log: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      operador: 'Op. Empilhador',
-      empresa_tenant: selectedTenant,
-      acao: 'REMANEJAMENTO_STOCK',
-      tabela_afetada: 'logistics.posicao_stock',
-      postgrest_rpc: 'fn_transferir_localizacao(stock_id, loc_nova)',
-      detalhes_json: JSON.stringify({ stockId, novaLocalizacao: newLocationCode }),
-      ip_terminal: '192.168.1.112 (Terminal RF)'
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    registarAuditoria(
+      'REMANEJAMENTO_STOCK',
+      'logistics.posicao_stock',
+      { stockId, novaLocalizacao: newLocationCode },
+      'Operador'
+    );
   };
 
   // Handler: Confirm Guia Paletization & ready to ship
@@ -197,18 +207,12 @@ function AppAutenticada({
     setGuiasEntrada(prev =>
       prev.map(g => (g.id === guiaId ? { ...g, status: 'PRONTA_EMBARQUE' } : g))
     );
-    const log: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      operador: 'Op. Expedição',
-      empresa_tenant: selectedTenant,
-      acao: 'CONFIRMAR_PALETIZACAO_GUIA',
-      tabela_afetada: 'logistics.guia_transporte',
-      postgrest_rpc: 'fn_confirmar_paletizacao(guia_id)',
-      detalhes_json: JSON.stringify({ guia_id: guiaId }),
-      ip_terminal: '192.168.1.115 (Terminal Expedição)'
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    registarAuditoria(
+      'CONFIRMAR_PALETIZACAO_GUIA',
+      'logistics.guia_transporte',
+      { guia_id: guiaId },
+      'Operador'
+    );
   };
 
   // Handler: Create Palete Expedição (from PaletizacaoModule)
@@ -217,18 +221,12 @@ function AppAutenticada({
     setGuiasEntrada(prev =>
       prev.map(g => (g.id === palete.guia_id ? { ...g, status: 'PALETIZADA' } : g))
     );
-    const log: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      operador: 'Op. Paletização',
-      empresa_tenant: selectedTenant,
-      acao: 'CRIAR_PALETE_EXPEDICAO_AUTO',
-      tabela_afetada: 'logistics.palete_expedicao',
-      postgrest_rpc: 'fn_criar_palete_expedicao(guia_id, linhas, temperatura)',
-      detalhes_json: JSON.stringify({ sscc: palete.sscc, guia_id: palete.guia_id, temperatura: palete.temperatura_zona }),
-      ip_terminal: '192.168.1.110 (Terminal Paletização)'
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    registarAuditoria(
+      'CRIAR_PALETE_EXPEDICAO_AUTO',
+      'logistics.palete_expedicao',
+      { sscc: palete.sscc, guia_id: palete.guia_id, temperatura: palete.temperatura_zona },
+      'Operador'
+    );
     showSuccess(`Palete ${palete.sscc} (Expedição) criada com sucesso`);
   };
 
@@ -238,18 +236,12 @@ function AppAutenticada({
     setGuiasEntrada(prev =>
       prev.map(g => (g.id === comprovante.guia_id ? { ...g, status: 'EXPEDIDA' } : g))
     );
-    const log: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      operador: 'Op. Expedição',
-      empresa_tenant: selectedTenant,
-      acao: 'REGISTAR_EMBARQUE_SAIDA',
-      tabela_afetada: 'logistics.comprovante_embarque',
-      postgrest_rpc: 'fn_registar_embarque(guia_id, paletas, transportador)',
-      detalhes_json: JSON.stringify({ numero_guia: comprovante.guia_id, transportador: comprovante.transportador_nome }),
-      ip_terminal: '192.168.1.115 (Terminal Expedição)'
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    registarAuditoria(
+      'REGISTAR_EMBARQUE_SAIDA',
+      'logistics.comprovante_embarque',
+      { numero_guia: comprovante.guia_id, transportador: comprovante.transportador_nome },
+      'Operador'
+    );
   };
 
   // Handler: Sync documents (Receção/Paletização/Expedição)
@@ -374,10 +366,18 @@ function AppAutenticada({
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sync Latency (ARTSOFT)</div>
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Latência API</div>
             <div className="flex items-baseline justify-between mt-2">
-              <span className="text-2xl font-bold text-slate-900">42ms</span>
-              <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">REST Ativo</span>
+              <span className="text-2xl font-bold text-slate-900">
+                {syncLatencyMs !== null ? `${syncLatencyMs}ms` : '—'}
+              </span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                syncLatencyMs !== null
+                  ? 'text-blue-700 bg-blue-50 border-blue-200'
+                  : 'text-red-700 bg-red-50 border-red-200'
+              }`}>
+                {syncLatencyMs !== null ? 'REST Ativo' : 'Indisponível'}
+              </span>
             </div>
           </div>
         </div>

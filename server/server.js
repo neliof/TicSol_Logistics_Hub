@@ -151,6 +151,54 @@ app.use('/rest/v1', apiLimiter)
 app.use('/rpc', apiLimiter)
 app.use('/api/artsoft', apiLimiter)
 
+// Auditoria genérica de aplicação (eventos sem recepcao_id associado —
+// ver database/025_auditoria_evento.sql). Antes gerada só no cliente
+// (App.tsx), nunca persistida; um refresh apagava todo o histórico.
+app.post('/rest/v1/auditoria', verifyJWT, setEmpresaContext, async (req, res) => {
+  try {
+    const { operador, acao, tabela_afetada, detalhes, ip_terminal } = req.body
+    const empresaId = req.user?.empresa_id
+
+    if (!operador || !acao) {
+      return res.status(400).json({ error: 'operador e acao obrigatórios' })
+    }
+
+    const result = await req.dbClient.query(
+      `INSERT INTO logistics.auditoria_evento
+       (empresa_id, operador, acao, tabela_afetada, detalhes, ip_terminal)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [empresaId, operador, acao, tabela_afetada || null, detalhes ? JSON.stringify(detalhes) : null, ip_terminal || null]
+    )
+
+    res.json({ success: true, evento: result.rows[0] })
+  } catch (err) {
+    console.error('POST /rest/v1/auditoria error:', err.message)
+    res.status(400).json({ error: err.message })
+  } finally {
+    if (req.dbClient) req.dbClient.release()
+  }
+})
+
+app.get('/rest/v1/auditoria', verifyJWT, setEmpresaContext, async (req, res) => {
+  try {
+    const limite = Math.min(parseInt(req.query.limit, 10) || 50, 200)
+    const offset = parseInt(req.query.offset, 10) || 0
+
+    const result = await req.dbClient.query(
+      `SELECT * FROM logistics.auditoria_evento ORDER BY criado_em DESC LIMIT $1 OFFSET $2`,
+      [limite, offset]
+    )
+
+    res.json({ success: true, eventos: result.rows, limit: limite, offset })
+  } catch (err) {
+    console.error('GET /rest/v1/auditoria error:', err.message)
+    res.status(400).json({ error: err.message })
+  } finally {
+    if (req.dbClient) req.dbClient.release()
+  }
+})
+
 app.get('/health/sync/:empresaId', async (req, res) => {
   try {
     const empresaId = String(req.params.empresaId)
