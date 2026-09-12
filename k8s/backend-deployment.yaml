@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: ticsol-logistics
+  labels:
+    app: ticsol-backend
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ticsol-backend
+  template:
+    metadata:
+      labels:
+        app: ticsol-backend
+        version: v1
+    spec:
+      serviceAccountName: ticsol-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: backend
+        image: ghcr.io/your-org/ticsol/backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: db-host
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: db-port
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: db-name
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ticsol-secrets
+              key: db-password
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ticsol-secrets
+              key: jwt-secret
+        - name: CORS_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: cors-origin
+        - name: ARTSOFT_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: artsoft-host
+        - name: ARTSOFT_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ticsol-config
+              key: artsoft-port
+        - name: ARTSOFT_USER
+          valueFrom:
+            secretKeyRef:
+              name: ticsol-secrets
+              key: artsoft-user
+        - name: ARTSOFT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ticsol-secrets
+              key: artsoft-password
+        - name: LOG_LEVEL
+          value: "info"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: logs
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ticsol-backend
+              topologyKey: kubernetes.io/hostname

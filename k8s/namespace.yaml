@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ticsol-logistics
+  labels:
+    name: ticsol-logistics
+    environment: production

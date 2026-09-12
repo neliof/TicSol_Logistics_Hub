@@ -1,0 +1,42 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ticsol-backend
+  namespace: ticsol-logistics
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ticsol-frontend
+  namespace: ticsol-logistics
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ticsol-backend-role
+  namespace: ticsol-logistics
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ticsol-backend-rolebinding
+  namespace: ticsol-logistics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ticsol-backend-role
+subjects:
+- kind: ServiceAccount
+  name: ticsol-backend
+  namespace: ticsol-logistics

@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ticsol-logistics
+
+resources:
+- namespace.yaml
+- rbac.yaml
+- configmap.yaml
+- postgres-statefulset.yaml
+- backend-deployment.yaml
+- frontend-deployment.yaml
+- services.yaml
+- ingress.yaml
+
+replicas:
+- name: backend
+  count: 3
+- name: frontend
+  count: 2
+
+commonLabels:
+  app.kubernetes.io/name: ticsol-logistics-hub
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  deployment.kubernetes.io/revision: "1"
+  orchestration: "kubernetes"
+
+images:
+- name: ghcr.io/your-org/ticsol/backend
+  newTag: latest
+- name: ghcr.io/your-org/ticsol/frontend
+  newTag: latest
